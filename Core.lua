@@ -470,11 +470,10 @@ local function CreateCharacterView(parentFrame)
         end)
     end
     
-    -- Sub-Tab Bar Header
-    local subTabBar = CreateFrame("Frame", "OnePanel_CharacterSubTabBar", subPanel)
-    subTabBar:SetPoint("TOPLEFT", subPanel, "TOPLEFT", 6, -6)
-    subTabBar:SetPoint("TOPRIGHT", subPanel, "TOPRIGHT", -6, -6)
-    subTabBar:SetHeight(38)
+    -- Sub-Tab Bar Header (Matches PaperDollSidebarTabs: 233x85, TOP 0,-4)
+    local subTabBar = CreateFrame("Frame", "OnePanel_PaperDollSidebarTabs", subPanel)
+    subTabBar:SetSize(233, 85)
+    subTabBar:SetPoint("TOP", subPanel, "TOP", 0, -4)
     
     local subTabs = {
         { id = "stats",   title = "Character Stats",   usePortrait = true },
@@ -488,7 +487,7 @@ local function CreateCharacterView(parentFrame)
     
     -- Sub-View Content Container
     local subContentView = CreateFrame("Frame", "OnePanel_CharacterSubContentView", subPanel)
-    subContentView:SetPoint("TOPLEFT", subTabBar, "BOTTOMLEFT", 0, -32)
+    subContentView:SetPoint("TOPLEFT", subTabBar, "BOTTOMLEFT", 0, -12)
     subContentView:SetPoint("BOTTOMRIGHT", subPanel, "BOTTOMRIGHT", -6, 6)
     subPanel.ContentView = subContentView
     
@@ -653,14 +652,14 @@ local function CreateCharacterView(parentFrame)
         end
     end
     
-    -- Sub-Tab Bar Icons (Centered at Top)
-    local startX = math.floor((288 - (33 * 3 + 12 * 2)) / 2) -- 82px
+    -- Sub-Tab Bar Icons (Matches PaperDollSidebarTab: CheckButton 42x42)
+    local startX = math.floor((233 - (42 * 3 + 12 * 2)) / 2) -- 41px
     
     for i, tabInfo in ipairs(subTabs) do
         local tabId = tabInfo.id
-        local btn = CreateFrame("Button", "OnePanel_CharSubTab_" .. tabId, subTabBar)
-        btn:SetSize(33, 35)
-        btn:SetPoint("TOPLEFT", subTabBar, "TOPLEFT", startX + (i - 1) * 45, -2)
+        local btn = CreateFrame("CheckButton", "OnePanel_CharSubTab_" .. tabId, subTabBar)
+        btn:SetSize(42, 42)
+        btn:SetPoint("TOPLEFT", subTabBar, "TOPLEFT", startX + (i - 1) * 54, -4)
         
         -- Normal Tab Background Texture
         local tabBg = btn:CreateTexture(nil, "BACKGROUND")
@@ -686,8 +685,8 @@ local function CreateCharacterView(parentFrame)
         
         -- Inner Icon
         local icon = btn:CreateTexture(nil, "ARTWORK")
-        icon:SetSize(22, 22)
-        icon:SetPoint("CENTER", btn, "CENTER", 0, -1)
+        icon:SetSize(28, 28)
+        icon:SetPoint("CENTER", btn, "CENTER", 0, 0)
         
         if tabInfo.usePortrait then
             SetPortraitTexture(icon, "player")
