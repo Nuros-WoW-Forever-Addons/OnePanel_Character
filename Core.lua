@@ -218,21 +218,49 @@ local function CreateCharacterView(parentFrame)
     -- Safe Rotation Helper
     local function RotateModel(delta)
         if not model then return end
+        model.facing = (model.facing or 0) + delta
         if model.SetFacing then
-            local cur = (model.GetFacing and model:GetFacing()) or model.facing or 0
-            local newFacing = cur + delta
-            model.facing = newFacing
-            model:SetFacing(newFacing)
+            pcall(function() model:SetFacing(model.facing) end)
         elseif model.SetRotation then
-            local cur = (model.GetRotation and model:GetRotation()) or model.facing or 0
-            local newRot = cur + delta
-            model.facing = newRot
-            model:SetRotation(newRot)
+            pcall(function() model:SetRotation(model.facing) end)
+        end
+    end
+
+    -- Safe Zoom Helper
+    local function ZoomModel(delta)
+        if not model then return end
+        model.camScale = math.max(0.3, math.min(2.5, (model.camScale or 1.0) + delta))
+        if model.SetCamDistanceScale then
+            pcall(function() model:SetCamDistanceScale(model.camScale) end)
+        end
+        if model.SetPortraitZoom then
+            local pZoom = math.max(0, math.min(1, 1.0 - (model.camScale * 0.5)))
+            pcall(function() model:SetPortraitZoom(pZoom) end)
         end
     end
     
-    -- Interactive Mouse Drag Rotation
+    -- Safe Reset Helper
+    local function ResetModel()
+        if not model then return end
+        model.facing = 0
+        model.camScale = 1.0
+        if model.SetFacing then
+            pcall(function() model:SetFacing(0) end)
+        elseif model.SetRotation then
+            pcall(function() model:SetRotation(0) end)
+        end
+        if model.SetCamDistanceScale then
+            pcall(function() model:SetCamDistanceScale(1.0) end)
+        end
+        if model.SetPortraitZoom then
+            pcall(function() model:SetPortraitZoom(0) end)
+        end
+        pcall(function() model:SetUnit("player") end)
+    end
+    
+    -- Interactive Mouse Drag Rotation & Scroll Wheel Zoom
     model:EnableMouse(true)
+    model:EnableMouseWheel(true)
     model:SetScript("OnMouseDown", function(self, button)
         if button == "LeftButton" then
             self.isRotating = true
@@ -241,6 +269,13 @@ local function CreateCharacterView(parentFrame)
     end)
     model:SetScript("OnMouseUp", function(self, button)
         if button == "LeftButton" then self.isRotating = false end
+    end)
+    model:SetScript("OnMouseWheel", function(self, delta)
+        if delta > 0 then
+            ZoomModel(-0.08)
+        else
+            ZoomModel(0.08)
+        end
     end)
     model:SetScript("OnUpdate", function(self)
         if self.isRotating then
@@ -260,18 +295,13 @@ local function CreateCharacterView(parentFrame)
     toolbar:SetPoint("TOP", leftArea, "TOP", 0, -14)
     toolbar:SetFrameLevel(leftArea:GetFrameLevel() + 20)
     
-    local function CreateBlizzardModelButton(name, texType, fallbackNorm, fallbackPush, tooltipText, updateAction)
+    local function CreateBlizzardModelButton(name, normTex, pushTex, tooltipText, onClickAction, onHoldAction)
         local btn = CreateFrame("Button", name, toolbar)
-        btn:SetSize(20, 20)
+        btn:SetSize(22, 22)
         
-        local normPath = "Interface\\Buttons\\UI-ModelButton-" .. texType
-        btn:SetNormalTexture(normPath)
-        local normTex = btn:GetNormalTexture()
-        if not normTex or not normTex:GetTexture() then
-            btn:SetNormalTexture(fallbackNorm)
-            btn:SetPushedTexture(fallbackPush)
-        else
-            btn:SetPushedTexture(normPath)
+        btn:SetNormalTexture(normTex)
+        if pushTex then
+            btn:SetPushedTexture(pushTex)
         end
         btn:SetHighlightTexture("Interface\\Buttons\\UI-Common-MouseHilight", "ADD")
         
@@ -286,13 +316,13 @@ local function CreateCharacterView(parentFrame)
             end
         end)
         btn:SetScript("OnUpdate", function(self, elapsed)
-            if self.isHolding and updateAction then
-                updateAction(elapsed, true)
+            if self.isHolding and onHoldAction then
+                onHoldAction(elapsed)
             end
         end)
-        btn:SetScript("OnClick", function(self)
-            if updateAction then
-                updateAction(0.1, false)
+        btn:SetScript("OnClick", function(self, button)
+            if button == "LeftButton" and onClickAction then
+                onClickAction()
             end
         end)
         
@@ -306,60 +336,43 @@ local function CreateCharacterView(parentFrame)
     end
     
     local btnZoomIn = CreateBlizzardModelButton("OnePanel_BtnZoomIn", 
-        "ZoomIn",
         "Interface\\Buttons\\UI-PlusButton-Up",
         "Interface\\Buttons\\UI-PlusButton-Down",
-        "Zoom In", function(elapsed, isHold)
-            local step = isHold and (-0.6 * elapsed) or -0.08
-            model.camScale = math.max(0.4, model.camScale + step)
-            if model.SetCamDistanceScale then model:SetCamDistanceScale(model.camScale) end
-        end)
+        "Zoom In", 
+        function() ZoomModel(-0.08) end,
+        function(elapsed) ZoomModel(-0.5 * elapsed) end)
     btnZoomIn:SetPoint("LEFT", toolbar, "LEFT", 0, 0)
     
     local btnZoomOut = CreateBlizzardModelButton("OnePanel_BtnZoomOut", 
-        "ZoomOut",
         "Interface\\Buttons\\UI-MinusButton-Up",
         "Interface\\Buttons\\UI-MinusButton-Down",
-        "Zoom Out", function(elapsed, isHold)
-            local step = isHold and (0.6 * elapsed) or 0.08
-            model.camScale = math.min(2.5, model.camScale + step)
-            if model.SetCamDistanceScale then model:SetCamDistanceScale(model.camScale) end
-        end)
+        "Zoom Out", 
+        function() ZoomModel(0.08) end,
+        function(elapsed) ZoomModel(0.5 * elapsed) end)
     btnZoomOut:SetPoint("LEFT", btnZoomIn, "RIGHT", 4, 0)
     
     local btnRotLeft = CreateBlizzardModelButton("OnePanel_BtnRotLeft", 
-        "RotateLeft",
         "Interface\\Buttons\\UI-RotationLeft-Button-Up",
         "Interface\\Buttons\\UI-RotationLeft-Button-Down",
-        "Rotate Left", function(elapsed, isHold)
-            local step = isHold and (-1.8 * elapsed) or -0.15
-            RotateModel(step)
-        end)
+        "Rotate Left", 
+        function() RotateModel(-0.15) end,
+        function(elapsed) RotateModel(-1.8 * elapsed) end)
     btnRotLeft:SetPoint("LEFT", btnZoomOut, "RIGHT", 4, 0)
     
     local btnRotRight = CreateBlizzardModelButton("OnePanel_BtnRotRight", 
-        "RotateRight",
         "Interface\\Buttons\\UI-RotationRight-Button-Up",
         "Interface\\Buttons\\UI-RotationRight-Button-Down",
-        "Rotate Right", function(elapsed, isHold)
-            local step = isHold and (1.8 * elapsed) or 0.15
-            RotateModel(step)
-        end)
+        "Rotate Right", 
+        function() RotateModel(0.15) end,
+        function(elapsed) RotateModel(1.8 * elapsed) end)
     btnRotRight:SetPoint("LEFT", btnRotLeft, "RIGHT", 4, 0)
     
     local btnReset = CreateBlizzardModelButton("OnePanel_BtnReset", 
-        "Reset",
         "Interface\\Buttons\\UI-RefreshButton",
         "Interface\\Buttons\\UI-RefreshButton",
-        "Reset Portrait", function(elapsed, isHold)
-            if not isHold then
-                model.camScale = 1.0
-                model.facing = 0
-                if model.SetCamDistanceScale then model:SetCamDistanceScale(1.0) end
-                if model.SetFacing then model:SetFacing(0) elseif model.SetRotation then model:SetRotation(0) end
-                model:SetUnit("player")
-            end
-        end)
+        "Reset Model & Camera", 
+        function() ResetModel() end,
+        nil)
     btnReset:SetPoint("LEFT", btnRotRight, "RIGHT", 4, 0)
     
     ---------------------------------------------------------------------------
