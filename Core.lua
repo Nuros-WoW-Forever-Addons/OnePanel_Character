@@ -37,12 +37,13 @@ local EquipmentSlotsBottom = {
     { id = 18, name = "RangedSlot",   icon = "Interface\\PaperDoll\\UI-PaperDoll-Slot-Ranged" },
 }
 
+-- Correct WoW Resistance School Indices: 2: Fire, 3: Nature, 4: Frost, 5: Shadow, 6: Arcane
 local ResistanceSchools = {
-    { id = 7, name = "Arcane", icon = "Interface\\PaperDollInfoFrame\\SpellSchoolIcon7" },
-    { id = 3, name = "Fire",   icon = "Interface\\PaperDollInfoFrame\\SpellSchoolIcon3" },
-    { id = 5, name = "Frost",  icon = "Interface\\PaperDollInfoFrame\\SpellSchoolIcon5" },
-    { id = 4, name = "Nature", icon = "Interface\\PaperDollInfoFrame\\SpellSchoolIcon4" },
-    { id = 6, name = "Shadow", icon = "Interface\\PaperDollInfoFrame\\SpellSchoolIcon6" },
+    { id = 6, name = "Arcane", icon = "Interface\\PaperDollInfoFrame\\SpellSchoolIcon7" },
+    { id = 2, name = "Fire",   icon = "Interface\\PaperDollInfoFrame\\SpellSchoolIcon3" },
+    { id = 4, name = "Frost",  icon = "Interface\\PaperDollInfoFrame\\SpellSchoolIcon5" },
+    { id = 3, name = "Nature", icon = "Interface\\PaperDollInfoFrame\\SpellSchoolIcon4" },
+    { id = 5, name = "Shadow", icon = "Interface\\PaperDollInfoFrame\\SpellSchoolIcon6" },
 }
 
 -------------------------------------------------------------------------------
@@ -103,11 +104,12 @@ local function FetchPlayerStats()
     local _, effectiveArmor = UnitArmor("player")
     table.insert(stats, { label = "Armor:", val = tostring(effectiveArmor or 0) })
     
-    -- Resistances
+    -- Resistances (Wrapped in pcall for safety)
     table.insert(stats, { header = "Resistances" })
     for _, res in ipairs(ResistanceSchools) do
-        local _, baseRes = UnitResistance("player", res.id)
-        table.insert(stats, { label = res.name .. ":", val = tostring(baseRes or 0), icon = res.icon })
+        local ok, baseRes = pcall(UnitResistance, "player", res.id)
+        local valStr = (ok and type(baseRes) == "number") and tostring(baseRes) or "0"
+        table.insert(stats, { label = res.name .. ":", val = valStr, icon = res.icon })
     end
     
     return stats
