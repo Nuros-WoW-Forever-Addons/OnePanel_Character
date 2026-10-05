@@ -1,7 +1,8 @@
 --[[
     OnePanel_Character - Core.lua
-    Character Sheet plugin featuring 3D player portrait model, equipment slots,
-    and embedded right-side details panel with Stats, Outfits, and Titles sub-tabs.
+    Character Sheet plugin featuring 3D player model with zoom/rotate controls,
+    equipment slots, collapsible side panel, framed headers, alternating row colors,
+    resistance icons, and custom translucent sub-tab tooltips.
 --]]
 
 local addonName, addonTable = ...
@@ -36,6 +37,14 @@ local EquipmentSlotsBottom = {
     { id = 18, name = "RangedSlot",   icon = "Interface\\PaperDoll\\UI-PaperDoll-Slot-Ranged" },
 }
 
+local ResistanceSchools = {
+    { id = 7, name = "Arcane", icon = "Interface\\PaperDollInfoFrame\\SpellSchoolIcon7" },
+    { id = 3, name = "Fire",   icon = "Interface\\PaperDollInfoFrame\\SpellSchoolIcon3" },
+    { id = 5, name = "Frost",  icon = "Interface\\PaperDollInfoFrame\\SpellSchoolIcon5" },
+    { id = 4, name = "Nature", icon = "Interface\\PaperDollInfoFrame\\SpellSchoolIcon4" },
+    { id = 6, name = "Shadow", icon = "Interface\\PaperDollInfoFrame\\SpellSchoolIcon6" },
+}
+
 -------------------------------------------------------------------------------
 -- Stats Calculation Helper
 -------------------------------------------------------------------------------
@@ -63,21 +72,79 @@ local function FetchPlayerStats()
         table.insert(stats, { label = statNames[i], val = tostring(stat or 0) })
     end
     
-    -- Weapons & Defense
-    table.insert(stats, { header = "Combat" })
+    -- Weapons
+    table.insert(stats, { header = "Weapons" })
     local minDmg, maxDmg = UnitDamage("player")
     minDmg = math.floor(minDmg or 0)
     maxDmg = math.floor(maxDmg or 0)
-    table.insert(stats, { label = "Main Hand Damage:", val = minDmg .. " - " .. maxDmg })
+    table.insert(stats, { label = "Main Hand:", val = minDmg .. " - " .. maxDmg })
     
     local baseAP, posAP, negAP = UnitAttackPower("player")
     local ap = (baseAP or 0) + (posAP or 0) + (negAP or 0)
     table.insert(stats, { label = "Attack Power:", val = tostring(ap) })
     
+    -- Modifiers
+    table.insert(stats, { header = "Modifiers" })
+    local crit = GetCritChance() or 0
+    table.insert(stats, { label = "Critical Strike:", val = string.format("%.1f%%", crit) })
+    local haste = GetHaste() or 0
+    table.insert(stats, { label = "Haste:", val = string.format("%.1f%%", haste) })
+    
+    -- Defense
+    table.insert(stats, { header = "Defense" })
+    local dodge = GetDodgeChance() or 0
+    table.insert(stats, { label = "Dodge:", val = string.format("%.1f%%", dodge) })
     local _, effectiveArmor = UnitArmor("player")
     table.insert(stats, { label = "Armor:", val = tostring(effectiveArmor or 0) })
     
+    -- Resistances
+    table.insert(stats, { header = "Resistances" })
+    for _, res in ipairs(ResistanceSchools) do
+        local _, baseRes = UnitResistance("player", res.id)
+        table.insert(stats, { label = res.name .. ":", val = tostring(baseRes or 0), icon = res.icon })
+    end
+    
     return stats
+end
+
+-------------------------------------------------------------------------------
+-- Custom Translucent Popup Tooltip Helper
+-------------------------------------------------------------------------------
+
+local function CreateCustomPopupTooltip()
+    if _G.OnePanel_CustomTooltip then return _G.OnePanel_CustomTooltip end
+    
+    local tooltip = CreateFrame("Frame", "OnePanel_CustomTooltip", UIParent)
+    tooltip:SetSize(160, 36)
+    tooltip:SetFrameStrata("TOOLTIP")
+    tooltip:Hide()
+    
+    -- Translucent Dark Background
+    local bg = tooltip:CreateTexture(nil, "BACKGROUND")
+    bg:SetAllPoints(tooltip)
+    bg:SetColorTexture(0, 0, 0, 0.85)
+    
+    if Utils and Utils.FrameHelper then
+        Utils.FrameHelper:ApplyBackdrop(tooltip,
+            nil,
+            "Interface\\Tooltips\\UI-Tooltip-Border",
+            16, 16, { left = 4, right = 4, top = 4, bottom = 4 }
+        )
+    end
+    
+    local text = tooltip:CreateFontString(nil, "OVERLAY", "GameFontHighlight")
+    text:SetPoint("CENTER", tooltip, "CENTER", 0, 0)
+    tooltip.Text = text
+    
+    function tooltip:ShowText(anchorFrame, titleText)
+        self.Text:SetText(titleText)
+        local width = math.max(130, self.Text:GetStringWidth() + 24)
+        self:SetSize(width, 34)
+        self:SetPoint("BOTTOM", anchorFrame, "TOP", 0, 6)
+        self:Show()
+    end
+    
+    return tooltip
 end
 
 -------------------------------------------------------------------------------
@@ -88,11 +155,20 @@ local function CreateCharacterView(parentFrame)
     local container = CreateFrame("Frame", "OnePanel_CharacterContainer", parentFrame)
     container:SetAllPoints(parentFrame)
     
-    -- Main 3D Model Area (Left Side)
+    local popupTooltip = CreateCustomPopupTooltip()
+    
+    -- Main 3D Model & Equipment Area (Left Side)
     local leftArea = CreateFrame("Frame", "OnePanel_CharacterLeftArea", container)
     leftArea:SetPoint("TOPLEFT", container, "TOPLEFT", 0, 0)
     leftArea:SetPoint("BOTTOMLEFT", container, "BOTTOMLEFT", 0, 0)
     leftArea:SetWidth(460)
+    
+    -- Subdued Dark Vignette Background behind 3D Model
+    local modelBg = leftArea:CreateTexture(nil, "BACKGROUND")
+    modelBg:SetPoint("TOPLEFT", leftArea, "TOPLEFT", 10, -10)
+    modelBg:SetPoint("BOTTOMRIGHT", leftArea, "BOTTOMRIGHT", -10, 10)
+    modelBg:SetTexture("Interface\\PaperDollInfoFrame\\UI-Character-CharacterFrame-Background")
+    modelBg:SetVertexColor(0.2, 0.2, 0.2, 0.9)
     
     -- Central 3D Player Portrait Model
     local model = CreateFrame("PlayerModel", "OnePanel_Character3DPlayerModel", leftArea)
@@ -100,9 +176,10 @@ local function CreateCharacterView(parentFrame)
     model:SetPoint("CENTER", leftArea, "CENTER", 0, -10)
     model:SetUnit("player")
     model:SetRotation(0)
+    model.camScale = 1.0
     container.Model = model
     
-    -- Interactive 3D Model Mouse Rotation Handling
+    -- Interactive Mouse Drag Rotation
     model:EnableMouse(true)
     model:SetScript("OnMouseDown", function(self, button)
         if button == "LeftButton" then
@@ -122,7 +199,56 @@ local function CreateCharacterView(parentFrame)
         end
     end)
     
-    -- Helper to create equipment slot button
+    ---------------------------------------------------------------------------
+    -- 3D Model Control Toolbar (Zoom, Rotate, Reset)
+    ---------------------------------------------------------------------------
+    
+    local toolbar = CreateFrame("Frame", "OnePanel_3DModelToolbar", leftArea)
+    toolbar:SetSize(170, 30)
+    toolbar:SetPoint("TOPLEFT", leftArea, "TOPLEFT", 60, -14)
+    
+    local function CreateToolbarButton(name, text, onClick)
+        local btn = CreateFrame("Button", name, toolbar, "UIPanelButtonTemplate")
+        btn:SetSize(28, 24)
+        btn:SetText(text)
+        btn:SetScript("OnClick", onClick)
+        return btn
+    end
+    
+    local btnZoomIn = CreateToolbarButton("OnePanel_BtnZoomIn", "+", function()
+        model.camScale = math.max(0.4, model.camScale - 0.15)
+        if model.SetCamDistanceScale then model:SetCamDistanceScale(model.camScale) end
+    end)
+    btnZoomIn:SetPoint("LEFT", toolbar, "LEFT", 0, 0)
+    
+    local btnZoomOut = CreateToolbarButton("OnePanel_BtnZoomOut", "-", function()
+        model.camScale = math.min(2.5, model.camScale + 0.15)
+        if model.SetCamDistanceScale then model:SetCamDistanceScale(model.camScale) end
+    end)
+    btnZoomOut:SetPoint("LEFT", btnZoomIn, "RIGHT", 4, 0)
+    
+    local btnRotLeft = CreateToolbarButton("OnePanel_BtnRotLeft", "<", function()
+        model:SetRotation(model:GetRotation() - 0.3)
+    end)
+    btnRotLeft:SetPoint("LEFT", btnZoomOut, "RIGHT", 4, 0)
+    
+    local btnRotRight = CreateToolbarButton("OnePanel_BtnRotRight", ">", function()
+        model:SetRotation(model:GetRotation() + 0.3)
+    end)
+    btnRotRight:SetPoint("LEFT", btnRotLeft, "RIGHT", 4, 0)
+    
+    local btnReset = CreateToolbarButton("OnePanel_BtnReset", "R", function()
+        model.camScale = 1.0
+        if model.SetCamDistanceScale then model:SetCamDistanceScale(1.0) end
+        model:SetRotation(0)
+        model:SetUnit("player")
+    end)
+    btnReset:SetPoint("LEFT", btnRotRight, "RIGHT", 4, 0)
+    
+    ---------------------------------------------------------------------------
+    -- Equipment Slot Buttons
+    ---------------------------------------------------------------------------
+    
     local function CreateSlotButton(slotInfo, relativeTo, point, relPoint, x, y)
         local btn = CreateFrame("Button", "OnePanel_EqSlot_" .. slotInfo.id, leftArea)
         btn:SetSize(38, 38)
@@ -161,33 +287,22 @@ local function CreateCharacterView(parentFrame)
     
     container.slots = {}
     
-    -- Render Left Equipment Column
     local prevBtn = leftArea
     for i, slotInfo in ipairs(EquipmentSlotsLeft) do
-        local btn = nil
-        if i == 1 then
-            btn = CreateSlotButton(slotInfo, leftArea, "TOPLEFT", "TOPLEFT", 12, -20)
-        else
-            btn = CreateSlotButton(slotInfo, prevBtn, "TOPLEFT", "BOTTOMLEFT", 0, -8)
-        end
+        local btn = (i == 1) and CreateSlotButton(slotInfo, leftArea, "TOPLEFT", "TOPLEFT", 12, -20)
+                             or CreateSlotButton(slotInfo, prevBtn, "TOPLEFT", "BOTTOMLEFT", 0, -8)
         prevBtn = btn
         container.slots[slotInfo.id] = btn
     end
     
-    -- Render Right Equipment Column
     prevBtn = leftArea
     for i, slotInfo in ipairs(EquipmentSlotsRight) do
-        local btn = nil
-        if i == 1 then
-            btn = CreateSlotButton(slotInfo, leftArea, "TOPRIGHT", "TOPRIGHT", -12, -20)
-        else
-            btn = CreateSlotButton(slotInfo, prevBtn, "TOPRIGHT", "BOTTOMRIGHT", 0, -8)
-        end
+        local btn = (i == 1) and CreateSlotButton(slotInfo, leftArea, "TOPRIGHT", "TOPRIGHT", -12, -20)
+                             or CreateSlotButton(slotInfo, prevBtn, "TOPRIGHT", "BOTTOMRIGHT", 0, -8)
         prevBtn = btn
         container.slots[slotInfo.id] = btn
     end
     
-    -- Render Bottom Weapon Row
     local mainHand = CreateSlotButton(EquipmentSlotsBottom[1], model, "BOTTOM", "BOTTOM", -46, 5)
     local offHand  = CreateSlotButton(EquipmentSlotsBottom[2], model, "BOTTOM", "BOTTOM", 0, 5)
     local ranged   = CreateSlotButton(EquipmentSlotsBottom[3], model, "BOTTOM", "BOTTOM", 46, 5)
@@ -196,7 +311,7 @@ local function CreateCharacterView(parentFrame)
     container.slots[18] = ranged
     
     ---------------------------------------------------------------------------
-    -- Right Embedded Details Sub-Panel (Stats, Outfits, Titles)
+    -- Collapsible Side Panel & Arrow Collapse Button
     ---------------------------------------------------------------------------
     
     local subPanel = CreateFrame("Frame", "OnePanel_CharacterSubPanel", container)
@@ -213,79 +328,148 @@ local function CreateCharacterView(parentFrame)
     end
     container.SubPanel = subPanel
     
-    -- Sub-Tab Buttons Bar Header
+    -- Collapsible Arrow Button above Hands Slot
+    local collapseBtn = CreateFrame("Button", "OnePanel_CollapseButton", leftArea, "UIPanelButtonTemplate")
+    collapseBtn:SetSize(24, 24)
+    collapseBtn:SetPoint("TOPRIGHT", leftArea, "TOPRIGHT", -12, -14)
+    collapseBtn:SetText(">")
+    container.CollapseButton = collapseBtn
+    
+    collapseBtn:SetScript("OnClick", function()
+        local isExpanded = OnePanel and OnePanel.isExpanded
+        local newState = not isExpanded
+        if OnePanel and OnePanel.SetPanelExpanded then
+            OnePanel:SetPanelExpanded(newState)
+        end
+        if newState then
+            subPanel:Show()
+            collapseBtn:SetText(">")
+        else
+            subPanel:Hide()
+            collapseBtn:SetText("<")
+        end
+    end)
+    
+    -- Sub-Tab Bar Header
     local subTabBar = CreateFrame("Frame", "OnePanel_CharacterSubTabBar", subPanel)
     subTabBar:SetPoint("TOPLEFT", subPanel, "TOPLEFT", 6, -6)
     subTabBar:SetPoint("TOPRIGHT", subPanel, "TOPRIGHT", -6, -6)
-    subTabBar:SetHeight(38)
+    subTabBar:SetHeight(40)
+    
+    -- Level & Class Title Header inside SubPanel
+    local levelClassText = subTabBar:CreateFontString(nil, "OVERLAY", "GameFontNormalLarge")
+    levelClassText:SetPoint("TOP", subTabBar, "TOP", 0, 4)
+    local lvl = UnitLevel("player") or 1
+    local cls = UnitClass("player") or ""
+    levelClassText:SetText(string.format("|cffffffffLevel %d|r |cffffcc00%s|r", lvl, cls))
     
     local subTabs = {
-        { id = "stats",   title = "Stats",   icon = "Interface\\Icons\\Paperdoll_Stat_Strength" },
-        { id = "outfits", title = "Outfits", icon = "Interface\\Icons\\INV_Armor_Chest_Plate_06" },
-        { id = "titles",  title = "Titles",  icon = "Interface\\Icons\\INV_Scroll_03" },
+        { id = "stats",   title = "Character Stats",   icon = "Interface\\Icons\\Paperdoll_Stat_Strength" },
+        { id = "outfits", title = "Equipment Manager", icon = "Interface\\Icons\\INV_Armor_Chest_Plate_06" },
+        { id = "titles",  title = "Titles",            icon = "Interface\\Icons\\INV_Scroll_03" },
     }
     
     subPanel.activeTab = "stats"
     subPanel.tabButtons = {}
     subPanel.views = {}
     
-    -- Sub-View Container
     local subContentView = CreateFrame("Frame", "OnePanel_CharacterSubContentView", subPanel)
-    subContentView:SetPoint("TOPLEFT", subTabBar, "BOTTOMLEFT", 0, -6)
+    subContentView:SetPoint("TOPLEFT", subTabBar, "BOTTOMLEFT", 0, -10)
     subContentView:SetPoint("BOTTOMRIGHT", subPanel, "BOTTOMRIGHT", -6, 6)
     subPanel.ContentView = subContentView
     
-    -- 1. Stats Sub-View
+    ---------------------------------------------------------------------------
+    -- Sub-View 1: Character Stats List (Framed Headers, Alternating Rows)
+    ---------------------------------------------------------------------------
+    
     local statsView = CreateFrame("ScrollFrame", "OnePanel_StatsSubView", subContentView, "UIPanelScrollFrameTemplate")
     statsView:SetAllPoints(subContentView)
     
     local statsContent = CreateFrame("Frame", "OnePanel_StatsContent", statsView)
-    statsContent:SetSize(270, 500)
+    statsContent:SetSize(270, 600)
     statsView:SetScrollChild(statsContent)
     subPanel.views["stats"] = statsView
     
     local function RefreshStatsDisplay()
-        if not statsContent.labels then statsContent.labels = {} end
-        for _, obj in ipairs(statsContent.labels) do obj:Hide() end
+        if not statsContent.elements then statsContent.elements = {} end
+        for _, el in ipairs(statsContent.elements) do el:Hide() end
         
         local stats = FetchPlayerStats()
-        local yOffset = -8
-        local labelIdx = 1
+        local yOffset = -6
+        local elIdx = 1
+        local dataRowCounter = 0
         
         for _, entry in ipairs(stats) do
             if entry.header then
-                local fontHeader = statsContent.labels[labelIdx] or statsContent:CreateFontString(nil, "OVERLAY", "GameFontNormal")
-                fontHeader:ClearAllPoints()
-                fontHeader:SetPoint("TOPLEFT", statsContent, "TOPLEFT", 12, yOffset)
-                fontHeader:SetText("|cffffcc00" .. entry.header .. "|r")
-                fontHeader:Show()
-                statsContent.labels[labelIdx] = fontHeader
-                labelIdx = labelIdx + 1
-                yOffset = yOffset - 22
+                dataRowCounter = 0
+                -- Framed Section Header
+                local headerBtn = statsContent.elements[elIdx]
+                if not headerBtn then
+                    headerBtn = CreateFrame("Button", nil, statsContent, "UIPanelButtonTemplate")
+                    headerBtn:Disable()
+                end
+                headerBtn:ClearAllPoints()
+                headerBtn:SetSize(264, 24)
+                headerBtn:SetPoint("TOPLEFT", statsContent, "TOPLEFT", 4, yOffset)
+                headerBtn:SetText(entry.header)
+                headerBtn:Show()
+                statsContent.elements[elIdx] = headerBtn
+                elIdx = elIdx + 1
+                yOffset = yOffset - 28
             elseif entry.label then
-                local fontLabel = statsContent.labels[labelIdx] or statsContent:CreateFontString(nil, "OVERLAY", "GameFontHighlight")
-                fontLabel:ClearAllPoints()
-                fontLabel:SetPoint("TOPLEFT", statsContent, "TOPLEFT", 16, yOffset)
-                fontLabel:SetText("|cffffd100" .. entry.label .. "|r")
-                fontLabel:Show()
-                statsContent.labels[labelIdx] = fontLabel
-                labelIdx = labelIdx + 1
+                dataRowCounter = dataRowCounter + 1
                 
-                local fontVal = statsContent.labels[labelIdx] or statsContent:CreateFontString(nil, "OVERLAY", "GameFontHighlightRight")
-                fontVal:ClearAllPoints()
-                fontVal:SetPoint("TOPRIGHT", statsContent, "TOPRIGHT", -24, yOffset)
-                fontVal:SetText(entry.val or "")
-                fontVal:Show()
-                statsContent.labels[labelIdx] = fontVal
-                labelIdx = labelIdx + 1
+                -- Row Container with Alternating Background Color
+                local rowFrame = statsContent.elements[elIdx]
+                if not rowFrame then
+                    rowFrame = CreateFrame("Frame", nil, statsContent)
+                    rowFrame.bg = rowFrame:CreateTexture(nil, "BACKGROUND")
+                    rowFrame.bg:SetAllPoints(rowFrame)
+                    
+                    rowFrame.icon = rowFrame:CreateTexture(nil, "ARTWORK")
+                    rowFrame.icon:SetSize(16, 16)
+                    rowFrame.icon:SetPoint("LEFT", rowFrame, "LEFT", 4, 0)
+                    
+                    rowFrame.label = rowFrame:CreateFontString(nil, "OVERLAY", "GameFontHighlight")
+                    
+                    rowFrame.val = rowFrame:CreateFontString(nil, "OVERLAY", "GameFontHighlightRight")
+                    rowFrame.val:SetPoint("RIGHT", rowFrame, "RIGHT", -6, 0)
+                end
                 
-                yOffset = yOffset - 18
+                rowFrame:ClearAllPoints()
+                rowFrame:SetSize(264, 20)
+                rowFrame:SetPoint("TOPLEFT", statsContent, "TOPLEFT", 4, yOffset)
+                
+                -- Alternating row colors
+                if dataRowCounter % 2 == 1 then
+                    rowFrame.bg:SetColorTexture(0.15, 0.15, 0.15, 0.45)
+                else
+                    rowFrame.bg:SetColorTexture(0, 0, 0, 0)
+                end
+                
+                -- Resistance Icon handling
+                if entry.icon then
+                    rowFrame.icon:SetTexture(entry.icon)
+                    rowFrame.icon:Show()
+                    rowFrame.label:SetPoint("LEFT", rowFrame.icon, "RIGHT", 6, 0)
+                else
+                    rowFrame.icon:Hide()
+                    rowFrame.label:SetPoint("LEFT", rowFrame, "LEFT", 8, 0)
+                end
+                
+                rowFrame.label:SetText("|cffffd100" .. entry.label .. "|r")
+                rowFrame.val:SetText(entry.val or "")
+                rowFrame:Show()
+                
+                statsContent.elements[elIdx] = rowFrame
+                elIdx = elIdx + 1
+                yOffset = yOffset - 22
             end
         end
     end
     statsView.Refresh = RefreshStatsDisplay
     
-    -- 2. Outfits Sub-View
+    -- Sub-View 2: Outfits
     local outfitsView = CreateFrame("Frame", "OnePanel_OutfitsSubView", subContentView)
     outfitsView:SetAllPoints(subContentView)
     local outfitsText = outfitsView:CreateFontString(nil, "OVERLAY", "GameFontHighlight")
@@ -293,7 +477,7 @@ local function CreateCharacterView(parentFrame)
     outfitsText:SetText("|cff00ccffEquipment Manager / Outfits|r")
     subPanel.views["outfits"] = outfitsView
     
-    -- 3. Titles Sub-View
+    -- Sub-View 3: Titles
     local titlesView = CreateFrame("Frame", "OnePanel_TitlesSubView", subContentView)
     titlesView:SetAllPoints(subContentView)
     local titlesText = titlesView:CreateFontString(nil, "OVERLAY", "GameFontHighlight")
@@ -323,24 +507,19 @@ local function CreateCharacterView(parentFrame)
         end
     end
     
-    -- Render Sub-Tab Buttons
+    -- Render Sub-Tab Icon Buttons
     local numTabs = #subTabs
-    local tabWidth = math.floor(288 / numTabs)
+    local tabWidth = 36
     for i, tabInfo in ipairs(subTabs) do
         local btn = CreateFrame("Button", "OnePanel_CharSubTab_" .. tabInfo.id, subTabBar)
-        btn:SetSize(tabWidth - 4, 32)
-        btn:SetPoint("LEFT", subTabBar, "LEFT", (i - 1) * tabWidth + 2, 0)
+        btn:SetSize(34, 34)
+        btn:SetPoint("TOPRIGHT", subTabBar, "TOPRIGHT", -((i - 1) * 38 + 10), -2)
         
         local icon = btn:CreateTexture(nil, "ARTWORK")
-        icon:SetSize(22, 22)
-        icon:SetPoint("LEFT", btn, "LEFT", 8, 0)
+        icon:SetSize(28, 28)
+        icon:SetPoint("CENTER", btn, "CENTER", 0, 0)
         icon:SetTexture(tabInfo.icon)
         btn.Icon = icon
-        
-        local label = btn:CreateFontString(nil, "OVERLAY", "GameFontNormalSmall")
-        label:SetPoint("LEFT", icon, "RIGHT", 6, 0)
-        label:SetText(tabInfo.title)
-        btn.Label = label
         
         local glow = btn:CreateTexture(nil, "OVERLAY")
         glow:SetTexture("Interface\\Buttons\\CheckButtonHilight")
@@ -348,6 +527,16 @@ local function CreateCharacterView(parentFrame)
         glow:SetAllPoints(btn)
         glow:Hide()
         btn.Glow = glow
+        
+        -- Custom Translucent Popup Tooltip on MouseOver
+        btn:SetScript("OnEnter", function(self)
+            if popupTooltip then
+                popupTooltip:ShowText(self, tabInfo.title)
+            end
+        end)
+        btn:SetScript("OnLeave", function()
+            if popupTooltip then popupTooltip:Hide() end
+        end)
         
         btn:SetScript("OnClick", function() SwitchSubTab(tabInfo.id) end)
         subPanel.tabButtons[tabInfo.id] = btn
