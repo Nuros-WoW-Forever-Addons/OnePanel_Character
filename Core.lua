@@ -458,37 +458,17 @@ local function CreateCharacterView(parentFrame)
     end
     container.SubPanel = subPanel
     
-    -- Visible Collapsible Arrow Button above right equipment slots
-    local collapseBtn = CreateFrame("Button", "OnePanel_CollapseButton", container)
-    collapseBtn:SetSize(22, 22)
-    collapseBtn:SetPoint("TOPRIGHT", leftArea, "TOPRIGHT", -8, -14)
-    collapseBtn:SetFrameLevel(subPanel:GetFrameLevel() + 20)
-    collapseBtn:SetNormalTexture("Interface\\Buttons\\UI-SpellbookSearch-DrillDown")
-    collapseBtn:SetPushedTexture("Interface\\Buttons\\UI-SpellbookSearch-DrillDown")
-    collapseBtn:SetHighlightTexture("Interface\\Buttons\\UI-Common-MouseHilight", "ADD")
-    container.CollapseButton = collapseBtn
-    
-    collapseBtn:SetScript("OnEnter", function(self)
-        GameTooltip:SetOwner(self, "ANCHOR_RIGHT")
-        GameTooltip:SetText("Toggle Side Details Panel", 1, 1, 1)
-        GameTooltip:Show()
-    end)
-    collapseBtn:SetScript("OnLeave", function() GameTooltip_Hide() end)
-    
-    collapseBtn:SetScript("OnClick", function()
-        local isExpanded = OnePanel and OnePanel.isExpanded
-        local newState = not isExpanded
-        if OnePanel and OnePanel.SetPanelExpanded then
-            OnePanel:SetPanelExpanded(newState)
-        end
-        if newState then
-            subPanel:Show()
-            collapseBtn:SetNormalTexture("Interface\\Buttons\\UI-SpellbookSearch-DrillDown")
-        else
-            subPanel:Hide()
-            collapseBtn:SetNormalTexture("Interface\\Buttons\\UI-SpellbookSearch-DrillDown")
-        end
-    end)
+    -- Sync subPanel visibility with OnePanel master expand state
+    if OnePanel then
+        subPanel:SetShown(OnePanel.isExpanded ~= false)
+    end
+    if Utils and Utils.EventBus then
+        Utils.EventBus:Register("ONEPANEL_EXPAND_STATE_CHANGED", function(isExpanded)
+            if subPanel and subPanel.SetShown then
+                subPanel:SetShown(isExpanded)
+            end
+        end)
+    end
     
     -- Sub-Tab Bar Header
     local subTabBar = CreateFrame("Frame", "OnePanel_CharacterSubTabBar", subPanel)
