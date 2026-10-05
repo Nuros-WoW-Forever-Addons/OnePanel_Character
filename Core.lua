@@ -260,12 +260,41 @@ local function CreateCharacterView(parentFrame)
     toolbar:SetPoint("TOP", leftArea, "TOP", 0, -14)
     toolbar:SetFrameLevel(leftArea:GetFrameLevel() + 20)
     
-    local function CreateBlizzardModelButton(name, normalTex, pushedTex, tooltipText, onClick)
+    local function CreateBlizzardModelButton(name, texType, fallbackNorm, fallbackPush, tooltipText, updateAction)
         local btn = CreateFrame("Button", name, toolbar)
-        btn:SetSize(22, 22)
-        btn:SetNormalTexture(normalTex)
-        if pushedTex then btn:SetPushedTexture(pushedTex) end
+        btn:SetSize(20, 20)
+        
+        local normPath = "Interface\\Buttons\\UI-ModelButton-" .. texType
+        btn:SetNormalTexture(normPath)
+        local normTex = btn:GetNormalTexture()
+        if not normTex or not normTex:GetTexture() then
+            btn:SetNormalTexture(fallbackNorm)
+            btn:SetPushedTexture(fallbackPush)
+        else
+            btn:SetPushedTexture(normPath)
+        end
         btn:SetHighlightTexture("Interface\\Buttons\\UI-Common-MouseHilight", "ADD")
+        
+        btn:SetScript("OnMouseDown", function(self, button)
+            if button == "LeftButton" then
+                self.isHolding = true
+            end
+        end)
+        btn:SetScript("OnMouseUp", function(self, button)
+            if button == "LeftButton" then
+                self.isHolding = false
+            end
+        end)
+        btn:SetScript("OnUpdate", function(self, elapsed)
+            if self.isHolding and updateAction then
+                updateAction(elapsed, true)
+            end
+        end)
+        btn:SetScript("OnClick", function(self)
+            if updateAction then
+                updateAction(0.1, false)
+            end
+        end)
         
         btn:SetScript("OnEnter", function(self)
             GameTooltip:SetOwner(self, "ANCHOR_TOP")
@@ -273,55 +302,65 @@ local function CreateCharacterView(parentFrame)
             GameTooltip:Show()
         end)
         btn:SetScript("OnLeave", function() GameTooltip_Hide() end)
-        btn:SetScript("OnClick", onClick)
         return btn
     end
     
     local btnZoomIn = CreateBlizzardModelButton("OnePanel_BtnZoomIn", 
-        "Interface\\Minimap\\UI-Minimap-ZoomIn-Up",
-        "Interface\\Minimap\\UI-Minimap-ZoomIn-Down",
-        "Zoom In", function()
-            model.camScale = math.max(0.4, model.camScale - 0.15)
+        "ZoomIn",
+        "Interface\\Buttons\\UI-PlusButton-Up",
+        "Interface\\Buttons\\UI-PlusButton-Down",
+        "Zoom In", function(elapsed, isHold)
+            local step = isHold and (-0.6 * elapsed) or -0.08
+            model.camScale = math.max(0.4, model.camScale + step)
             if model.SetCamDistanceScale then model:SetCamDistanceScale(model.camScale) end
         end)
     btnZoomIn:SetPoint("LEFT", toolbar, "LEFT", 0, 0)
     
     local btnZoomOut = CreateBlizzardModelButton("OnePanel_BtnZoomOut", 
-        "Interface\\Minimap\\UI-Minimap-ZoomOut-Up",
-        "Interface\\Minimap\\UI-Minimap-ZoomOut-Down",
-        "Zoom Out", function()
-            model.camScale = math.min(2.5, model.camScale + 0.15)
+        "ZoomOut",
+        "Interface\\Buttons\\UI-MinusButton-Up",
+        "Interface\\Buttons\\UI-MinusButton-Down",
+        "Zoom Out", function(elapsed, isHold)
+            local step = isHold and (0.6 * elapsed) or 0.08
+            model.camScale = math.min(2.5, model.camScale + step)
             if model.SetCamDistanceScale then model:SetCamDistanceScale(model.camScale) end
         end)
-    btnZoomOut:SetPoint("LEFT", btnZoomIn, "RIGHT", 3, 0)
+    btnZoomOut:SetPoint("LEFT", btnZoomIn, "RIGHT", 4, 0)
     
     local btnRotLeft = CreateBlizzardModelButton("OnePanel_BtnRotLeft", 
+        "RotateLeft",
         "Interface\\Buttons\\UI-RotationLeft-Button-Up",
         "Interface\\Buttons\\UI-RotationLeft-Button-Down",
-        "Rotate Left", function()
-            RotateModel(-0.3)
+        "Rotate Left", function(elapsed, isHold)
+            local step = isHold and (-1.8 * elapsed) or -0.15
+            RotateModel(step)
         end)
-    btnRotLeft:SetPoint("LEFT", btnZoomOut, "RIGHT", 3, 0)
+    btnRotLeft:SetPoint("LEFT", btnZoomOut, "RIGHT", 4, 0)
     
     local btnRotRight = CreateBlizzardModelButton("OnePanel_BtnRotRight", 
+        "RotateRight",
         "Interface\\Buttons\\UI-RotationRight-Button-Up",
         "Interface\\Buttons\\UI-RotationRight-Button-Down",
-        "Rotate Right", function()
-            RotateModel(0.3)
+        "Rotate Right", function(elapsed, isHold)
+            local step = isHold and (1.8 * elapsed) or 0.15
+            RotateModel(step)
         end)
-    btnRotRight:SetPoint("LEFT", btnRotLeft, "RIGHT", 3, 0)
+    btnRotRight:SetPoint("LEFT", btnRotLeft, "RIGHT", 4, 0)
     
     local btnReset = CreateBlizzardModelButton("OnePanel_BtnReset", 
+        "Reset",
         "Interface\\Buttons\\UI-RefreshButton",
         "Interface\\Buttons\\UI-RefreshButton",
-        "Reset Portrait", function()
-            model.camScale = 1.0
-            model.facing = 0
-            if model.SetCamDistanceScale then model:SetCamDistanceScale(1.0) end
-            if model.SetFacing then model:SetFacing(0) elseif model.SetRotation then model:SetRotation(0) end
-            model:SetUnit("player")
+        "Reset Portrait", function(elapsed, isHold)
+            if not isHold then
+                model.camScale = 1.0
+                model.facing = 0
+                if model.SetCamDistanceScale then model:SetCamDistanceScale(1.0) end
+                if model.SetFacing then model:SetFacing(0) elseif model.SetRotation then model:SetRotation(0) end
+                model:SetUnit("player")
+            end
         end)
-    btnReset:SetPoint("LEFT", btnRotRight, "RIGHT", 3, 0)
+    btnReset:SetPoint("LEFT", btnRotRight, "RIGHT", 4, 0)
     
     ---------------------------------------------------------------------------
     -- Equipment Slot Buttons
@@ -467,6 +506,38 @@ local function CreateCharacterView(parentFrame)
     local statsView = CreateFrame("ScrollFrame", "OnePanel_StatsSubView", subContentView, "UIPanelScrollFrameTemplate")
     statsView:SetAllPoints(subContentView)
     
+    -- Mouse Wheel Smooth Scrolling (24px step per scroll tick)
+    statsView:EnableMouseWheel(true)
+    statsView:SetScript("OnMouseWheel", function(self, delta)
+        local cur = self:GetVerticalScroll()
+        local maxScroll = self:GetVerticalScrollRange()
+        local step = 24
+        local newScroll = math.max(0, math.min(maxScroll, cur - (delta * step)))
+        self:SetVerticalScroll(newScroll)
+    end)
+    
+    -- Scrollbar Arrow Buttons Step Override (20px step per arrow click)
+    local sbName = statsView:GetName() .. "ScrollBar"
+    local scrollBar = _G[sbName]
+    if scrollBar then
+        scrollBar:SetValueStep(20)
+        local upBtn = _G[sbName .. "ScrollUpButton"]
+        local downBtn = _G[sbName .. "ScrollDownButton"]
+        if upBtn then
+            upBtn:SetScript("OnClick", function()
+                local cur = statsView:GetVerticalScroll()
+                statsView:SetVerticalScroll(math.max(0, cur - 20))
+            end)
+        end
+        if downBtn then
+            downBtn:SetScript("OnClick", function()
+                local cur = statsView:GetVerticalScroll()
+                local maxScroll = statsView:GetVerticalScrollRange()
+                statsView:SetVerticalScroll(math.min(maxScroll, cur + 20))
+            end)
+        end
+    end
+    
     local statsContent = CreateFrame("Frame", "OnePanel_StatsContent", statsView)
     statsContent:SetSize(270, 600)
     statsView:SetScrollChild(statsContent)
@@ -594,7 +665,7 @@ local function CreateCharacterView(parentFrame)
         local tabId = tabInfo.id
         local btn = CreateFrame("Button", "OnePanel_CharSubTab_" .. tabId, subTabBar)
         btn:SetSize(32, 32)
-        btn:SetPoint("TOPLEFT", subTabBar, "TOPLEFT", 12 + (i - 1) * 42, -2)
+        btn:SetPoint("TOPLEFT", subTabBar, "TOPLEFT", 84 + (i - 1) * 44, -2)
         
         local bg = btn:CreateTexture(nil, "BACKGROUND")
         bg:SetTexture("Interface\\Buttons\\UI-Quickslot2")
