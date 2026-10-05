@@ -440,14 +440,62 @@ local function CreateCharacterView(parentFrame)
     container.slots[17] = offHand
     container.slots[18] = ranged
     
+    -- Native Right-Side Collapse / Expand Toggle Button (Anchored to TOPRIGHT of leftArea at -6,-6)
+    local toggleBtn = CreateFrame("Button", "OnePanel_RightSideToggleButton", leftArea)
+    toggleBtn:SetSize(28, 28)
+    toggleBtn:SetPoint("TOPRIGHT", leftArea, "TOPRIGHT", -6, -6)
+    toggleBtn:SetFrameLevel(510)
+    
+    local toggleIcon = toggleBtn:CreateTexture(nil, "ARTWORK")
+    toggleIcon:SetAllPoints(toggleBtn)
+    local setNorm = pcall(function() toggleIcon:SetTexture(130869) end)
+    if not setNorm or not toggleIcon:GetTexture() then
+        toggleIcon:SetTexture("Interface\\Buttons\\UI-SpellbookSearch-DrillDown")
+    end
+    toggleBtn.Icon = toggleIcon
+    
+    local toggleHilight = toggleBtn:CreateTexture(nil, "HIGHLIGHT")
+    local setHilight = pcall(function() toggleHilight:SetTexture(130757) end)
+    if not setHilight or not toggleHilight:GetTexture() then
+        toggleHilight:SetTexture("Interface\\Buttons\\UI-Common-MouseHilight")
+    end
+    toggleHilight:SetBlendMode("ADD")
+    toggleHilight:SetAllPoints(toggleBtn)
+    
+    local function UpdateToggleIcon()
+        if OnePanel and OnePanel.isExpanded then
+            toggleIcon:SetTexCoord(0, 1, 0, 1)
+        else
+            toggleIcon:SetTexCoord(1, 0, 0, 1)
+        end
+    end
+    toggleBtn.UpdateIcon = UpdateToggleIcon
+    UpdateToggleIcon()
+    
+    toggleBtn:SetScript("OnClick", function()
+        if OnePanel and OnePanel.SetPanelExpanded then
+            OnePanel:SetPanelExpanded(not OnePanel.isExpanded)
+        end
+        UpdateToggleIcon()
+    end)
+    
+    toggleBtn:SetScript("OnEnter", function(self)
+        GameTooltip:SetOwner(self, "ANCHOR_RIGHT")
+        GameTooltip:SetText((OnePanel and OnePanel.isExpanded) and "Collapse Side Panel" or "Expand Side Panel", 1, 1, 1)
+        GameTooltip:Show()
+    end)
+    toggleBtn:SetScript("OnLeave", function() GameTooltip_Hide() end)
+    
+    container.RightSideToggleButton = toggleBtn
+
     ---------------------------------------------------------------------------
-    -- Collapsible Side Panel & Arrow Collapse Button
+    -- Collapsible Side Panel & Subtab Header
     ---------------------------------------------------------------------------
     
     local subPanel = CreateFrame("Frame", "OnePanel_CharacterSubPanel", container)
     subPanel:SetPoint("TOPRIGHT", container, "TOPRIGHT", -10, -12)
     subPanel:SetPoint("BOTTOMRIGHT", container, "BOTTOMRIGHT", -10, 12)
-    subPanel:SetWidth(300)
+    subPanel:SetWidth(233)
     
     if Utils and Utils.FrameHelper then
         Utils.FrameHelper:ApplyBackdrop(subPanel,
@@ -466,6 +514,9 @@ local function CreateCharacterView(parentFrame)
         Utils.EventBus:Register("ONEPANEL_EXPAND_STATE_CHANGED", function(isExpanded)
             if subPanel and subPanel.SetShown then
                 subPanel:SetShown(isExpanded)
+            end
+            if toggleBtn and toggleBtn.UpdateIcon then
+                toggleBtn:UpdateIcon()
             end
         end)
     end
@@ -531,7 +582,7 @@ local function CreateCharacterView(parentFrame)
     end
     
     local statsContent = CreateFrame("Frame", "OnePanel_StatsContent", statsView)
-    statsContent:SetSize(270, 600)
+    statsContent:SetSize(193, 600)
     statsView:SetScrollChild(statsContent)
     subPanel.views["stats"] = statsView
     
@@ -553,8 +604,8 @@ local function CreateCharacterView(parentFrame)
                     headerBtn:Disable()
                 end
                 headerBtn:ClearAllPoints()
-                headerBtn:SetSize(264, 22)
-                headerBtn:SetPoint("TOPLEFT", statsContent, "TOPLEFT", 4, yOffset)
+                headerBtn:SetSize(187, 22)
+                headerBtn:SetPoint("TOPLEFT", statsContent, "TOPLEFT", 3, yOffset)
                 headerBtn:SetText(entry.header)
                 headerBtn:Show()
                 statsContent.elements[elIdx] = headerBtn
@@ -571,17 +622,17 @@ local function CreateCharacterView(parentFrame)
                     
                     rowFrame.icon = rowFrame:CreateTexture(nil, "ARTWORK")
                     rowFrame.icon:SetSize(16, 16)
-                    rowFrame.icon:SetPoint("LEFT", rowFrame, "LEFT", 6, 0)
+                    rowFrame.icon:SetPoint("LEFT", rowFrame, "LEFT", 4, 0)
                     
                     rowFrame.label = rowFrame:CreateFontString(nil, "OVERLAY", "GameFontHighlight")
                     
                     rowFrame.val = rowFrame:CreateFontString(nil, "OVERLAY", "GameFontHighlightRight")
-                    rowFrame.val:SetPoint("RIGHT", rowFrame, "RIGHT", -6, 0)
+                    rowFrame.val:SetPoint("RIGHT", rowFrame, "RIGHT", -4, 0)
                 end
                 
                 rowFrame:ClearAllPoints()
-                rowFrame:SetSize(264, 20)
-                rowFrame:SetPoint("TOPLEFT", statsContent, "TOPLEFT", 4, yOffset)
+                rowFrame:SetSize(187, 20)
+                rowFrame:SetPoint("TOPLEFT", statsContent, "TOPLEFT", 3, yOffset)
                 
                 if dataRowCounter % 2 == 1 then
                     rowFrame.bg:SetColorTexture(0.12, 0.12, 0.12, 0.5)
@@ -592,10 +643,10 @@ local function CreateCharacterView(parentFrame)
                 if entry.icon then
                     rowFrame.icon:SetTexture(entry.icon)
                     rowFrame.icon:Show()
-                    rowFrame.label:SetPoint("LEFT", rowFrame.icon, "RIGHT", 6, 0)
+                    rowFrame.label:SetPoint("LEFT", rowFrame.icon, "RIGHT", 4, 0)
                 else
                     rowFrame.icon:Hide()
-                    rowFrame.label:SetPoint("LEFT", rowFrame, "LEFT", 8, 0)
+                    rowFrame.label:SetPoint("LEFT", rowFrame, "LEFT", 6, 0)
                 end
                 
                 rowFrame.label:SetText("|cffffd100" .. entry.label .. "|r")
@@ -652,40 +703,18 @@ local function CreateCharacterView(parentFrame)
         end
     end
     
-    -- Sub-Tab Bar Icons (Matches PaperDollSidebarTab: CheckButton 42x42)
-    local startX = math.floor((233 - (42 * 3 + 12 * 2)) / 2) -- 41px
+    -- Sub-Tab Bar Icons (Matches PaperDollSidebarTab: CheckButton 42x42 with UI-Character-Info-StatTab atlases)
+    local startX = math.floor((233 - (42 * 3)) / 2) -- 53px centered
     
     for i, tabInfo in ipairs(subTabs) do
         local tabId = tabInfo.id
         local btn = CreateFrame("CheckButton", "OnePanel_CharSubTab_" .. tabId, subTabBar)
         btn:SetSize(42, 42)
-        btn:SetPoint("TOPLEFT", subTabBar, "TOPLEFT", startX + (i - 1) * 54, -4)
+        btn:SetPoint("TOPLEFT", subTabBar, "TOPLEFT", startX + (i - 1) * 42, -4)
         
-        -- Normal Tab Background Texture
-        local tabBg = btn:CreateTexture(nil, "BACKGROUND")
-        tabBg:SetTexture("Interface\\PaperDollInfoFrame\\PaperDollSidebarTabs")
-        tabBg:SetTexCoord(0.015625, 0.53125, 0.015625, 0.328125)
-        tabBg:SetAllPoints(btn)
-        btn.TabBg = tabBg
-        
-        -- Selected Active Tab Ring Overlay
-        local tabSelected = btn:CreateTexture(nil, "OVERLAY", nil, 1)
-        tabSelected:SetTexture("Interface\\PaperDollInfoFrame\\PaperDollSidebarTabs")
-        tabSelected:SetTexCoord(0.015625, 0.53125, 0.359375, 0.671875)
-        tabSelected:SetAllPoints(btn)
-        tabSelected:Hide()
-        btn.TabSelected = tabSelected
-        
-        -- Hover Highlight
-        local tabHilight = btn:CreateTexture(nil, "HIGHLIGHT")
-        tabHilight:SetTexture("Interface\\PaperDollInfoFrame\\PaperDollSidebarTabs")
-        tabHilight:SetTexCoord(0.015625, 0.53125, 0.703125, 0.984375)
-        tabHilight:SetAllPoints(btn)
-        tabHilight:SetBlendMode("ADD")
-        
-        -- Inner Icon
-        local icon = btn:CreateTexture(nil, "ARTWORK")
-        icon:SetSize(28, 28)
+        -- Background Icon (Layer: BACKGROUND)
+        local icon = btn:CreateTexture(nil, "BACKGROUND")
+        icon:SetSize(36, 33)
         icon:SetPoint("CENTER", btn, "CENTER", 0, 0)
         
         if tabInfo.usePortrait then
@@ -695,6 +724,31 @@ local function CreateCharacterView(parentFrame)
             icon:SetTexture(tabInfo.icon)
         end
         btn.Icon = icon
+        
+        -- Border Ring Texture (Layer: BORDER, Atlas: UI-Character-Info-StatTab)
+        local tabBorder = btn:CreateTexture(nil, "BORDER")
+        local setBorder = pcall(function() tabBorder:SetAtlas("UI-Character-Info-StatTab", true) end)
+        if not setBorder or not tabBorder:GetTexture() then
+            tabBorder:SetTexture(8175457)
+        end
+        tabBorder:SetAllPoints(btn)
+        btn.TabBorder = tabBorder
+        
+        -- Selected Active Overlay (Layer: OVERLAY, Atlas: UI-Character-Info-StatTab-Selected)
+        local tabSelected = btn:CreateTexture(nil, "OVERLAY", nil, 1)
+        local setSelected = pcall(function() tabSelected:SetAtlas("UI-Character-Info-StatTab-Selected", true) end)
+        if not setSelected or not tabSelected:GetTexture() then
+            tabSelected:SetTexture(8175457)
+        end
+        tabSelected:SetAllPoints(btn)
+        tabSelected:Hide()
+        btn.TabSelected = tabSelected
+        
+        -- Hover Highlight
+        local tabHilight = btn:CreateTexture(nil, "HIGHLIGHT")
+        tabHilight:SetTexture("Interface\\Buttons\\UI-Common-MouseHilight")
+        tabHilight:SetAllPoints(btn)
+        tabHilight:SetBlendMode("ADD")
         
         btn:SetScript("OnEnter", function(self)
             GameTooltip:SetOwner(self, "ANCHOR_RIGHT")
