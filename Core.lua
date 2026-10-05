@@ -664,30 +664,50 @@ local function CreateCharacterView(parentFrame)
         end
         for id, btn in pairs(subPanel.tabButtons) do
             if id == targetTabId then
-                if btn.Glow then btn.Glow:Show() end
+                if btn.TabSelected then btn.TabSelected:Show() end
                 if btn.Icon then btn.Icon:SetVertexColor(1, 1, 1, 1) end
             else
-                if btn.Glow then btn.Glow:Hide() end
+                if btn.TabSelected then btn.TabSelected:Hide() end
                 if btn.Icon then btn.Icon:SetVertexColor(0.6, 0.6, 0.6, 1) end
             end
         end
     end
     
     -- Sub-Tab Bar Icons (Centered at Top)
+    local startX = math.floor((288 - (33 * 3 + 12 * 2)) / 2) -- 82px
+    
     for i, tabInfo in ipairs(subTabs) do
         local tabId = tabInfo.id
         local btn = CreateFrame("Button", "OnePanel_CharSubTab_" .. tabId, subTabBar)
-        btn:SetSize(32, 32)
-        btn:SetPoint("TOPLEFT", subTabBar, "TOPLEFT", 84 + (i - 1) * 44, -2)
+        btn:SetSize(33, 35)
+        btn:SetPoint("TOPLEFT", subTabBar, "TOPLEFT", startX + (i - 1) * 45, -2)
         
-        local bg = btn:CreateTexture(nil, "BACKGROUND")
-        bg:SetTexture("Interface\\Buttons\\UI-Quickslot2")
-        bg:SetSize(52, 52)
-        bg:SetPoint("CENTER", btn, "CENTER", 0, 0)
+        -- Normal Tab Background Texture
+        local tabBg = btn:CreateTexture(nil, "BACKGROUND")
+        tabBg:SetTexture("Interface\\PaperDollInfoFrame\\PaperDollSidebarTabs")
+        tabBg:SetTexCoord(0.015625, 0.53125, 0.015625, 0.328125)
+        tabBg:SetAllPoints(btn)
+        btn.TabBg = tabBg
         
+        -- Selected Active Tab Ring Overlay
+        local tabSelected = btn:CreateTexture(nil, "OVERLAY", nil, 1)
+        tabSelected:SetTexture("Interface\\PaperDollInfoFrame\\PaperDollSidebarTabs")
+        tabSelected:SetTexCoord(0.015625, 0.53125, 0.359375, 0.671875)
+        tabSelected:SetAllPoints(btn)
+        tabSelected:Hide()
+        btn.TabSelected = tabSelected
+        
+        -- Hover Highlight
+        local tabHilight = btn:CreateTexture(nil, "HIGHLIGHT")
+        tabHilight:SetTexture("Interface\\PaperDollInfoFrame\\PaperDollSidebarTabs")
+        tabHilight:SetTexCoord(0.015625, 0.53125, 0.703125, 0.984375)
+        tabHilight:SetAllPoints(btn)
+        tabHilight:SetBlendMode("ADD")
+        
+        -- Inner Icon
         local icon = btn:CreateTexture(nil, "ARTWORK")
-        icon:SetSize(28, 28)
-        icon:SetPoint("CENTER", btn, "CENTER", 0, 0)
+        icon:SetSize(22, 22)
+        icon:SetPoint("CENTER", btn, "CENTER", 0, -1)
         
         if tabInfo.usePortrait then
             SetPortraitTexture(icon, "player")
@@ -697,20 +717,13 @@ local function CreateCharacterView(parentFrame)
         end
         btn.Icon = icon
         
-        local glow = btn:CreateTexture(nil, "OVERLAY")
-        glow:SetTexture("Interface\\Buttons\\CheckButtonHilight")
-        glow:SetBlendMode("ADD")
-        glow:SetAllPoints(btn)
-        glow:Hide()
-        btn.Glow = glow
-        
         btn:SetScript("OnEnter", function(self)
-            if popupTooltip then
-                popupTooltip:ShowText(self, tabInfo.title)
-            end
+            GameTooltip:SetOwner(self, "ANCHOR_RIGHT")
+            GameTooltip:SetText(tabInfo.title, 1, 1, 1)
+            GameTooltip:Show()
         end)
         btn:SetScript("OnLeave", function()
-            if popupTooltip then popupTooltip:Hide() end
+            GameTooltip_Hide()
         end)
         
         btn:SetScript("OnClick", function()
