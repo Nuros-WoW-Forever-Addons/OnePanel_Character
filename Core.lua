@@ -46,7 +46,7 @@ local ResistanceSchools = {
 }
 
 -------------------------------------------------------------------------------
--- Stats Calculation Helper
+-- Safe Stats Calculation Helper
 -------------------------------------------------------------------------------
 
 local function FetchPlayerStats()
@@ -61,7 +61,8 @@ local function FetchPlayerStats()
     local powerLabel = powerToken and (powerToken:sub(1,1):upper() .. powerToken:sub(2):lower() .. ":") or "Power:"
     table.insert(stats, { label = powerLabel, val = tostring(powerMax) })
     
-    local speed = math.floor((GetUnitSpeed("player") or 7) / 7 * 100 + 0.5)
+    local rawSpeed = GetUnitSpeed and GetUnitSpeed("player") or 7
+    local speed = math.floor((rawSpeed or 7) / 7 * 100 + 0.5)
     table.insert(stats, { label = "Movement Speed:", val = speed .. "%" })
     
     -- Primary Attributes
@@ -85,15 +86,20 @@ local function FetchPlayerStats()
     
     -- Modifiers
     table.insert(stats, { header = "Modifiers" })
-    local crit = GetCritChance() or 0
-    table.insert(stats, { label = "Critical Strike:", val = string.format("%.1f%%", crit) })
-    local haste = GetHaste() or 0
-    table.insert(stats, { label = "Haste:", val = string.format("%.1f%%", haste) })
+    local crit = (GetCritChance and GetCritChance()) or 0
+    local critVal = (type(crit) == "number") and crit or 0
+    table.insert(stats, { label = "Critical Strike:", val = string.format("%.1f%%", critVal) })
+    
+    local haste = (GetHaste and GetHaste()) or 0
+    local hasteVal = (type(haste) == "number") and haste or 0
+    table.insert(stats, { label = "Haste:", val = string.format("%.1f%%", hasteVal) })
     
     -- Defense
     table.insert(stats, { header = "Defense" })
-    local dodge = GetDodgeChance() or 0
-    table.insert(stats, { label = "Dodge:", val = string.format("%.1f%%", dodge) })
+    local dodge = (GetDodgeChance and GetDodgeChance()) or 0
+    local dodgeVal = (type(dodge) == "number") and dodge or 0
+    table.insert(stats, { label = "Dodge:", val = string.format("%.1f%%", dodgeVal) })
+    
     local _, effectiveArmor = UnitArmor("player")
     table.insert(stats, { label = "Armor:", val = tostring(effectiveArmor or 0) })
     
@@ -119,7 +125,6 @@ local function CreateCustomPopupTooltip()
     tooltip:SetFrameStrata("TOOLTIP")
     tooltip:Hide()
     
-    -- Translucent Dark Background
     local bg = tooltip:CreateTexture(nil, "BACKGROUND")
     bg:SetAllPoints(tooltip)
     bg:SetColorTexture(0, 0, 0, 0.85)
@@ -224,16 +229,16 @@ local function CreateCharacterView(parentFrame)
     end)
     
     ---------------------------------------------------------------------------
-    -- 3D Model Control Toolbar (Authentic Blizzard Buttons)
+    -- 3D Model Control Toolbar (Centered Above Portrait)
     ---------------------------------------------------------------------------
     
     local toolbar = CreateFrame("Frame", "OnePanel_3DModelToolbar", leftArea)
     toolbar:SetSize(160, 26)
-    toolbar:SetPoint("TOPLEFT", leftArea, "TOPLEFT", 60, -14)
+    toolbar:SetPoint("TOP", model, "TOP", 0, -10)
     
     local function CreateBlizzardModelButton(name, normalTex, pushedTex, tooltipText, onClick)
         local btn = CreateFrame("Button", name, toolbar)
-        btn:SetSize(22, 22)
+        btn:SetSize(24, 24)
         btn:SetNormalTexture(normalTex)
         if pushedTex then btn:SetPushedTexture(pushedTex) end
         btn:SetHighlightTexture("Interface\\Buttons\\UI-Common-MouseHilight", "ADD")
@@ -377,9 +382,9 @@ local function CreateCharacterView(parentFrame)
     end
     container.SubPanel = subPanel
     
-    -- Collapsible Arrow Button above Hands Slot (Blizzard Arrow Style)
+    -- Visible Collapsible Arrow Button above Hands Slot
     local collapseBtn = CreateFrame("Button", "OnePanel_CollapseButton", leftArea)
-    collapseBtn:SetSize(22, 22)
+    collapseBtn:SetSize(24, 24)
     collapseBtn:SetPoint("TOPRIGHT", leftArea, "TOPRIGHT", -12, -14)
     collapseBtn:SetNormalTexture("Interface\\Buttons\\UI-Spellbook-PageDown-Up")
     collapseBtn:SetPushedTexture("Interface\\Buttons\\UI-Spellbook-PageDown-Down")
@@ -541,18 +546,20 @@ local function CreateCharacterView(parentFrame)
         for id, view in pairs(subPanel.views) do
             if id == targetTabId then
                 view:Show()
-                if view.Refresh then view:Refresh() end
+                if type(view.Refresh) == "function" then
+                    pcall(view.Refresh, view)
+                end
             else
                 view:Hide()
             end
         end
         for id, btn in pairs(subPanel.tabButtons) do
             if id == targetTabId then
-                btn.Glow:Show()
-                btn.Icon:SetVertexColor(1, 1, 1, 1)
+                if btn.Glow then btn.Glow:Show() end
+                if btn.Icon then btn.Icon:SetVertexColor(1, 1, 1, 1) end
             else
-                btn.Glow:Hide()
-                btn.Icon:SetVertexColor(0.6, 0.6, 0.6, 1)
+                if btn.Glow then btn.Glow:Hide() end
+                if btn.Icon then btn.Icon:SetVertexColor(0.6, 0.6, 0.6, 1) end
             end
         end
     end
