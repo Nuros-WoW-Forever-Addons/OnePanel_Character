@@ -1,8 +1,8 @@
 --[[
     OnePanel_Character - Core.lua
-    Character Sheet plugin featuring 3D player model with zoom/rotate controls,
-    equipment slots, collapsible side panel, framed headers, alternating row colors,
-    resistance icons, and custom translucent sub-tab tooltips.
+    Character Sheet plugin featuring 3D player model with authentic Blizzard controls,
+    race-specific background art, equipment slots, collapsible side panel, framed headers,
+    alternating row colors, resistance icons, and custom translucent sub-tab tooltips.
 --]]
 
 local addonName, addonTable = ...
@@ -138,7 +138,7 @@ local function CreateCustomPopupTooltip()
     
     function tooltip:ShowText(anchorFrame, titleText)
         self.Text:SetText(titleText)
-        local width = math.max(130, self.Text:GetStringWidth() + 24)
+        local width = math.max(140, self.Text:GetStringWidth() + 24)
         self:SetSize(width, 34)
         self:SetPoint("BOTTOM", anchorFrame, "TOP", 0, 6)
         self:Show()
@@ -163,12 +163,21 @@ local function CreateCharacterView(parentFrame)
     leftArea:SetPoint("BOTTOMLEFT", container, "BOTTOMLEFT", 0, 0)
     leftArea:SetWidth(460)
     
-    -- Subdued Dark Vignette Background behind 3D Model
+    -- Race-Specific Character Background Art
+    local _, raceFile = UnitRace("player")
+    raceFile = raceFile or "NightElf"
+    local bgTexturePath = "Interface\\DressUpFrame\\DressUpBackground-" .. raceFile
+    
     local modelBg = leftArea:CreateTexture(nil, "BACKGROUND")
     modelBg:SetPoint("TOPLEFT", leftArea, "TOPLEFT", 10, -10)
     modelBg:SetPoint("BOTTOMRIGHT", leftArea, "BOTTOMRIGHT", -10, 10)
-    modelBg:SetTexture("Interface\\PaperDollInfoFrame\\UI-Character-CharacterFrame-Background")
-    modelBg:SetVertexColor(0.2, 0.2, 0.2, 0.9)
+    modelBg:SetTexture(bgTexturePath)
+    modelBg:SetTexCoord(0, 1, 0, 1)
+    
+    -- Fallback tint if race backdrop is unavailable
+    local modelVignette = leftArea:CreateTexture(nil, "BORDER")
+    modelVignette:SetAllPoints(modelBg)
+    modelVignette:SetColorTexture(0, 0, 0, 0.25)
     
     -- Central 3D Player Portrait Model
     local model = CreateFrame("PlayerModel", "OnePanel_Character3DPlayerModel", leftArea)
@@ -200,49 +209,86 @@ local function CreateCharacterView(parentFrame)
     end)
     
     ---------------------------------------------------------------------------
-    -- 3D Model Control Toolbar (Zoom, Rotate, Reset)
+    -- 3D Model Control Toolbar (Authentic Blizzard Buttons)
     ---------------------------------------------------------------------------
     
     local toolbar = CreateFrame("Frame", "OnePanel_3DModelToolbar", leftArea)
-    toolbar:SetSize(170, 30)
+    toolbar:SetSize(160, 26)
     toolbar:SetPoint("TOPLEFT", leftArea, "TOPLEFT", 60, -14)
     
-    local function CreateToolbarButton(name, text, onClick)
-        local btn = CreateFrame("Button", name, toolbar, "UIPanelButtonTemplate")
-        btn:SetSize(28, 24)
-        btn:SetText(text)
+    local function CreateBlizzardModelButton(name, normalTex, pushedTex, tooltipText, onClick)
+        local btn = CreateFrame("Button", name, toolbar)
+        btn:SetSize(22, 22)
+        
+        local nTex = btn:CreateTexture(nil, "BACKGROUND")
+        nTex:SetTexture(normalTex)
+        nTex:SetAllPoints(btn)
+        btn:SetNormalTexture(nTex)
+        
+        local pTex = btn:CreateTexture(nil, "BACKGROUND")
+        pTex:SetTexture(pushedTex or normalTex)
+        pTex:SetAllPoints(btn)
+        btn:SetPushedTexture(pTex)
+        
+        local hlTex = btn:CreateTexture(nil, "HIGHLIGHT")
+        hlTex:SetTexture("Interface\\Buttons\\UI-Common-MouseHilight")
+        hlTex:SetBlendMode("ADD")
+        hlTex:SetAllPoints(btn)
+        btn:SetHighlightTexture(hlTex)
+        
+        btn:SetScript("OnEnter", function(self)
+            GameTooltip:SetOwner(self, "ANCHOR_TOP")
+            GameTooltip:SetText(tooltipText, 1, 1, 1)
+            GameTooltip:Show()
+        end)
+        btn:SetScript("OnLeave", function() GameTooltip_Hide() end)
         btn:SetScript("OnClick", onClick)
         return btn
     end
     
-    local btnZoomIn = CreateToolbarButton("OnePanel_BtnZoomIn", "+", function()
-        model.camScale = math.max(0.4, model.camScale - 0.15)
-        if model.SetCamDistanceScale then model:SetCamDistanceScale(model.camScale) end
-    end)
+    local btnZoomIn = CreateBlizzardModelButton("OnePanel_BtnZoomIn", 
+        "Interface\\Buttons\\UI-Minimap-ZoomIn-Button-Up",
+        "Interface\\Buttons\\UI-Minimap-ZoomIn-Button-Down",
+        "Zoom In", function()
+            model.camScale = math.max(0.4, model.camScale - 0.15)
+            if model.SetCamDistanceScale then model:SetCamDistanceScale(model.camScale) end
+        end)
     btnZoomIn:SetPoint("LEFT", toolbar, "LEFT", 0, 0)
     
-    local btnZoomOut = CreateToolbarButton("OnePanel_BtnZoomOut", "-", function()
-        model.camScale = math.min(2.5, model.camScale + 0.15)
-        if model.SetCamDistanceScale then model:SetCamDistanceScale(model.camScale) end
-    end)
+    local btnZoomOut = CreateBlizzardModelButton("OnePanel_BtnZoomOut", 
+        "Interface\\Buttons\\UI-Minimap-ZoomOut-Button-Up",
+        "Interface\\Buttons\\UI-Minimap-ZoomOut-Button-Down",
+        "Zoom Out", function()
+            model.camScale = math.min(2.5, model.camScale + 0.15)
+            if model.SetCamDistanceScale then model:SetCamDistanceScale(model.camScale) end
+        end)
     btnZoomOut:SetPoint("LEFT", btnZoomIn, "RIGHT", 4, 0)
     
-    local btnRotLeft = CreateToolbarButton("OnePanel_BtnRotLeft", "<", function()
-        model:SetRotation(model:GetRotation() - 0.3)
-    end)
+    local btnRotLeft = CreateBlizzardModelButton("OnePanel_BtnRotLeft", 
+        "Interface\\Buttons\\UI-RotationLeft-Button-Up",
+        "Interface\\Buttons\\UI-RotationLeft-Button-Down",
+        "Rotate Left", function()
+            model:SetRotation(model:GetRotation() - 0.3)
+        end)
     btnRotLeft:SetPoint("LEFT", btnZoomOut, "RIGHT", 4, 0)
     
-    local btnRotRight = CreateToolbarButton("OnePanel_BtnRotRight", ">", function()
-        model:SetRotation(model:GetRotation() + 0.3)
-    end)
+    local btnRotRight = CreateBlizzardModelButton("OnePanel_BtnRotRight", 
+        "Interface\\Buttons\\UI-RotationRight-Button-Up",
+        "Interface\\Buttons\\UI-RotationRight-Button-Down",
+        "Rotate Right", function()
+            model:SetRotation(model:GetRotation() + 0.3)
+        end)
     btnRotRight:SetPoint("LEFT", btnRotLeft, "RIGHT", 4, 0)
     
-    local btnReset = CreateToolbarButton("OnePanel_BtnReset", "R", function()
-        model.camScale = 1.0
-        if model.SetCamDistanceScale then model:SetCamDistanceScale(1.0) end
-        model:SetRotation(0)
-        model:SetUnit("player")
-    end)
+    local btnReset = CreateBlizzardModelButton("OnePanel_BtnReset", 
+        "Interface\\Buttons\\UI-RefreshButton",
+        "Interface\\Buttons\\UI-RefreshButton",
+        "Reset Portrait", function()
+            model.camScale = 1.0
+            if model.SetCamDistanceScale then model:SetCamDistanceScale(1.0) end
+            model:SetRotation(0)
+            model:SetUnit("player")
+        end)
     btnReset:SetPoint("LEFT", btnRotRight, "RIGHT", 4, 0)
     
     ---------------------------------------------------------------------------
@@ -328,12 +374,22 @@ local function CreateCharacterView(parentFrame)
     end
     container.SubPanel = subPanel
     
-    -- Collapsible Arrow Button above Hands Slot
-    local collapseBtn = CreateFrame("Button", "OnePanel_CollapseButton", leftArea, "UIPanelButtonTemplate")
-    collapseBtn:SetSize(24, 24)
+    -- Collapsible Arrow Button above Hands Slot (Blizzard Arrow Style)
+    local collapseBtn = CreateFrame("Button", "OnePanel_CollapseButton", leftArea)
+    collapseBtn:SetSize(22, 22)
     collapseBtn:SetPoint("TOPRIGHT", leftArea, "TOPRIGHT", -12, -14)
-    collapseBtn:SetText(">")
-    container.CollapseButton = collapseBtn
+    
+    local cTex = collapseBtn:CreateTexture(nil, "BACKGROUND")
+    cTex:SetTexture("Interface\\Buttons\\UI-Spellbook-PageDown-Up")
+    cTex:SetAllPoints(collapseBtn)
+    collapseBtn:SetNormalTexture(cTex)
+    
+    collapseBtn:SetScript("OnEnter", function(self)
+        GameTooltip:SetOwner(self, "ANCHOR_RIGHT")
+        GameTooltip:SetText("Toggle Side Details Panel", 1, 1, 1)
+        GameTooltip:Show()
+    end)
+    collapseBtn:SetScript("OnLeave", function() GameTooltip_Hide() end)
     
     collapseBtn:SetScript("OnClick", function()
         local isExpanded = OnePanel and OnePanel.isExpanded
@@ -343,10 +399,10 @@ local function CreateCharacterView(parentFrame)
         end
         if newState then
             subPanel:Show()
-            collapseBtn:SetText(">")
+            cTex:SetTexture("Interface\\Buttons\\UI-Spellbook-PageDown-Up")
         else
             subPanel:Hide()
-            collapseBtn:SetText("<")
+            cTex:SetTexture("Interface\\Buttons\\UI-Spellbook-PageUp-Up")
         end
     end)
     
@@ -354,14 +410,7 @@ local function CreateCharacterView(parentFrame)
     local subTabBar = CreateFrame("Frame", "OnePanel_CharacterSubTabBar", subPanel)
     subTabBar:SetPoint("TOPLEFT", subPanel, "TOPLEFT", 6, -6)
     subTabBar:SetPoint("TOPRIGHT", subPanel, "TOPRIGHT", -6, -6)
-    subTabBar:SetHeight(40)
-    
-    -- Level & Class Title Header inside SubPanel
-    local levelClassText = subTabBar:CreateFontString(nil, "OVERLAY", "GameFontNormalLarge")
-    levelClassText:SetPoint("TOP", subTabBar, "TOP", 0, 4)
-    local lvl = UnitLevel("player") or 1
-    local cls = UnitClass("player") or ""
-    levelClassText:SetText(string.format("|cffffffffLevel %d|r |cffffcc00%s|r", lvl, cls))
+    subTabBar:SetHeight(38)
     
     local subTabs = {
         { id = "stats",   title = "Character Stats",   icon = "Interface\\Icons\\Paperdoll_Stat_Strength" },
@@ -373,8 +422,52 @@ local function CreateCharacterView(parentFrame)
     subPanel.tabButtons = {}
     subPanel.views = {}
     
+    -- Sub-Tab Bar Icons (Centered at Top)
+    for i, tabInfo in ipairs(subTabs) do
+        local btn = CreateFrame("Button", "OnePanel_CharSubTab_" .. tabInfo.id, subTabBar)
+        btn:SetSize(32, 32)
+        btn:SetPoint("TOPLEFT", subTabBar, "TOPLEFT", 12 + (i - 1) * 42, -2)
+        
+        local bg = btn:CreateTexture(nil, "BACKGROUND")
+        bg:SetTexture("Interface\\Buttons\\UI-Quickslot2")
+        bg:SetSize(52, 52)
+        bg:SetPoint("CENTER", btn, "CENTER", 0, 0)
+        
+        local icon = btn:CreateTexture(nil, "ARTWORK")
+        icon:SetSize(28, 28)
+        icon:SetPoint("CENTER", btn, "CENTER", 0, 0)
+        icon:SetTexture(tabInfo.icon)
+        btn.Icon = icon
+        
+        local glow = btn:CreateTexture(nil, "OVERLAY")
+        glow:SetTexture("Interface\\Buttons\\CheckButtonHilight")
+        glow:SetBlendMode("ADD")
+        glow:SetAllPoints(btn)
+        glow:Hide()
+        btn.Glow = glow
+        
+        btn:SetScript("OnEnter", function(self)
+            if popupTooltip then
+                popupTooltip:ShowText(self, tabInfo.title)
+            end
+        end)
+        btn:SetScript("OnLeave", function()
+            if popupTooltip then popupTooltip:Hide() end
+        end)
+        
+        subPanel.tabButtons[tabInfo.id] = btn
+    end
+    
+    -- Level & Class Title Header (Centered under sub-tabs)
+    local levelClassText = subPanel:CreateFontString(nil, "OVERLAY", "GameFontNormalLarge")
+    levelClassText:SetPoint("TOP", subTabBar, "BOTTOM", 0, -4)
+    local lvl = UnitLevel("player") or 1
+    local cls = UnitClass("player") or ""
+    levelClassText:SetText(string.format("|cffffffffLevel %d|r |cffffcc00%s|r", lvl, cls))
+    
+    -- Sub-View Content Container
     local subContentView = CreateFrame("Frame", "OnePanel_CharacterSubContentView", subPanel)
-    subContentView:SetPoint("TOPLEFT", subTabBar, "BOTTOMLEFT", 0, -10)
+    subContentView:SetPoint("TOPLEFT", subTabBar, "BOTTOMLEFT", 0, -32)
     subContentView:SetPoint("BOTTOMRIGHT", subPanel, "BOTTOMRIGHT", -6, 6)
     subPanel.ContentView = subContentView
     
@@ -395,7 +488,7 @@ local function CreateCharacterView(parentFrame)
         for _, el in ipairs(statsContent.elements) do el:Hide() end
         
         local stats = FetchPlayerStats()
-        local yOffset = -6
+        local yOffset = -4
         local elIdx = 1
         local dataRowCounter = 0
         
@@ -409,17 +502,16 @@ local function CreateCharacterView(parentFrame)
                     headerBtn:Disable()
                 end
                 headerBtn:ClearAllPoints()
-                headerBtn:SetSize(264, 24)
+                headerBtn:SetSize(264, 22)
                 headerBtn:SetPoint("TOPLEFT", statsContent, "TOPLEFT", 4, yOffset)
                 headerBtn:SetText(entry.header)
                 headerBtn:Show()
                 statsContent.elements[elIdx] = headerBtn
                 elIdx = elIdx + 1
-                yOffset = yOffset - 28
+                yOffset = yOffset - 26
             elseif entry.label then
                 dataRowCounter = dataRowCounter + 1
                 
-                -- Row Container with Alternating Background Color
                 local rowFrame = statsContent.elements[elIdx]
                 if not rowFrame then
                     rowFrame = CreateFrame("Frame", nil, statsContent)
@@ -428,7 +520,7 @@ local function CreateCharacterView(parentFrame)
                     
                     rowFrame.icon = rowFrame:CreateTexture(nil, "ARTWORK")
                     rowFrame.icon:SetSize(16, 16)
-                    rowFrame.icon:SetPoint("LEFT", rowFrame, "LEFT", 4, 0)
+                    rowFrame.icon:SetPoint("LEFT", rowFrame, "LEFT", 6, 0)
                     
                     rowFrame.label = rowFrame:CreateFontString(nil, "OVERLAY", "GameFontHighlight")
                     
@@ -440,14 +532,14 @@ local function CreateCharacterView(parentFrame)
                 rowFrame:SetSize(264, 20)
                 rowFrame:SetPoint("TOPLEFT", statsContent, "TOPLEFT", 4, yOffset)
                 
-                -- Alternating row colors
+                -- Alternating Row Colors
                 if dataRowCounter % 2 == 1 then
-                    rowFrame.bg:SetColorTexture(0.15, 0.15, 0.15, 0.45)
+                    rowFrame.bg:SetColorTexture(0.12, 0.12, 0.12, 0.5)
                 else
                     rowFrame.bg:SetColorTexture(0, 0, 0, 0)
                 end
                 
-                -- Resistance Icon handling
+                -- Resistance Icons
                 if entry.icon then
                     rowFrame.icon:SetTexture(entry.icon)
                     rowFrame.icon:Show()
@@ -463,9 +555,11 @@ local function CreateCharacterView(parentFrame)
                 
                 statsContent.elements[elIdx] = rowFrame
                 elIdx = elIdx + 1
-                yOffset = yOffset - 22
+                yOffset = yOffset - 21
             end
         end
+        
+        statsContent:SetHeight(math.abs(yOffset) + 30)
     end
     statsView.Refresh = RefreshStatsDisplay
     
@@ -507,39 +601,8 @@ local function CreateCharacterView(parentFrame)
         end
     end
     
-    -- Render Sub-Tab Icon Buttons
-    local numTabs = #subTabs
-    local tabWidth = 36
-    for i, tabInfo in ipairs(subTabs) do
-        local btn = CreateFrame("Button", "OnePanel_CharSubTab_" .. tabInfo.id, subTabBar)
-        btn:SetSize(34, 34)
-        btn:SetPoint("TOPRIGHT", subTabBar, "TOPRIGHT", -((i - 1) * 38 + 10), -2)
-        
-        local icon = btn:CreateTexture(nil, "ARTWORK")
-        icon:SetSize(28, 28)
-        icon:SetPoint("CENTER", btn, "CENTER", 0, 0)
-        icon:SetTexture(tabInfo.icon)
-        btn.Icon = icon
-        
-        local glow = btn:CreateTexture(nil, "OVERLAY")
-        glow:SetTexture("Interface\\Buttons\\CheckButtonHilight")
-        glow:SetBlendMode("ADD")
-        glow:SetAllPoints(btn)
-        glow:Hide()
-        btn.Glow = glow
-        
-        -- Custom Translucent Popup Tooltip on MouseOver
-        btn:SetScript("OnEnter", function(self)
-            if popupTooltip then
-                popupTooltip:ShowText(self, tabInfo.title)
-            end
-        end)
-        btn:SetScript("OnLeave", function()
-            if popupTooltip then popupTooltip:Hide() end
-        end)
-        
-        btn:SetScript("OnClick", function() SwitchSubTab(tabInfo.id) end)
-        subPanel.tabButtons[tabInfo.id] = btn
+    for id, btn in pairs(subPanel.tabButtons) do
+        btn:SetScript("OnClick", function() SwitchSubTab(id) end)
     end
     
     SwitchSubTab("stats")
