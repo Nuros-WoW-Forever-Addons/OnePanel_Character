@@ -174,7 +174,6 @@ local function CreateCharacterView(parentFrame)
     modelBg:SetTexture(bgTexturePath)
     modelBg:SetTexCoord(0, 1, 0, 1)
     
-    -- Fallback tint if race backdrop is unavailable
     local modelVignette = leftArea:CreateTexture(nil, "BORDER")
     modelVignette:SetAllPoints(modelBg)
     modelVignette:SetColorTexture(0, 0, 0, 0.25)
@@ -184,9 +183,25 @@ local function CreateCharacterView(parentFrame)
     model:SetSize(320, 420)
     model:SetPoint("CENTER", leftArea, "CENTER", 0, -10)
     model:SetUnit("player")
-    model:SetRotation(0)
+    model.facing = 0
     model.camScale = 1.0
     container.Model = model
+    
+    -- Safe Rotation Helper
+    local function RotateModel(delta)
+        if not model then return end
+        if model.SetFacing then
+            local cur = (model.GetFacing and model:GetFacing()) or model.facing or 0
+            local newFacing = cur + delta
+            model.facing = newFacing
+            model:SetFacing(newFacing)
+        elseif model.SetRotation then
+            local cur = (model.GetRotation and model:GetRotation()) or model.facing or 0
+            local newRot = cur + delta
+            model.facing = newRot
+            model:SetRotation(newRot)
+        end
+    end
     
     -- Interactive Mouse Drag Rotation
     model:EnableMouse(true)
@@ -203,7 +218,7 @@ local function CreateCharacterView(parentFrame)
         if self.isRotating then
             local currentX = GetCursorPosition()
             local diff = (currentX - self.prevCursorX) * 0.01
-            self:SetRotation(self:GetRotation() + diff)
+            RotateModel(diff)
             self.prevCursorX = currentX
         end
     end)
@@ -219,22 +234,9 @@ local function CreateCharacterView(parentFrame)
     local function CreateBlizzardModelButton(name, normalTex, pushedTex, tooltipText, onClick)
         local btn = CreateFrame("Button", name, toolbar)
         btn:SetSize(22, 22)
-        
-        local nTex = btn:CreateTexture(nil, "BACKGROUND")
-        nTex:SetTexture(normalTex)
-        nTex:SetAllPoints(btn)
-        btn:SetNormalTexture(nTex)
-        
-        local pTex = btn:CreateTexture(nil, "BACKGROUND")
-        pTex:SetTexture(pushedTex or normalTex)
-        pTex:SetAllPoints(btn)
-        btn:SetPushedTexture(pTex)
-        
-        local hlTex = btn:CreateTexture(nil, "HIGHLIGHT")
-        hlTex:SetTexture("Interface\\Buttons\\UI-Common-MouseHilight")
-        hlTex:SetBlendMode("ADD")
-        hlTex:SetAllPoints(btn)
-        btn:SetHighlightTexture(hlTex)
+        btn:SetNormalTexture(normalTex)
+        if pushedTex then btn:SetPushedTexture(pushedTex) end
+        btn:SetHighlightTexture("Interface\\Buttons\\UI-Common-MouseHilight", "ADD")
         
         btn:SetScript("OnEnter", function(self)
             GameTooltip:SetOwner(self, "ANCHOR_TOP")
@@ -268,7 +270,7 @@ local function CreateCharacterView(parentFrame)
         "Interface\\Buttons\\UI-RotationLeft-Button-Up",
         "Interface\\Buttons\\UI-RotationLeft-Button-Down",
         "Rotate Left", function()
-            model:SetRotation(model:GetRotation() - 0.3)
+            RotateModel(-0.3)
         end)
     btnRotLeft:SetPoint("LEFT", btnZoomOut, "RIGHT", 4, 0)
     
@@ -276,7 +278,7 @@ local function CreateCharacterView(parentFrame)
         "Interface\\Buttons\\UI-RotationRight-Button-Up",
         "Interface\\Buttons\\UI-RotationRight-Button-Down",
         "Rotate Right", function()
-            model:SetRotation(model:GetRotation() + 0.3)
+            RotateModel(0.3)
         end)
     btnRotRight:SetPoint("LEFT", btnRotLeft, "RIGHT", 4, 0)
     
@@ -285,8 +287,9 @@ local function CreateCharacterView(parentFrame)
         "Interface\\Buttons\\UI-RefreshButton",
         "Reset Portrait", function()
             model.camScale = 1.0
+            model.facing = 0
             if model.SetCamDistanceScale then model:SetCamDistanceScale(1.0) end
-            model:SetRotation(0)
+            if model.SetFacing then model:SetFacing(0) elseif model.SetRotation then model:SetRotation(0) end
             model:SetUnit("player")
         end)
     btnReset:SetPoint("LEFT", btnRotRight, "RIGHT", 4, 0)
@@ -378,11 +381,10 @@ local function CreateCharacterView(parentFrame)
     local collapseBtn = CreateFrame("Button", "OnePanel_CollapseButton", leftArea)
     collapseBtn:SetSize(22, 22)
     collapseBtn:SetPoint("TOPRIGHT", leftArea, "TOPRIGHT", -12, -14)
-    
-    local cTex = collapseBtn:CreateTexture(nil, "BACKGROUND")
-    cTex:SetTexture("Interface\\Buttons\\UI-Spellbook-PageDown-Up")
-    cTex:SetAllPoints(collapseBtn)
-    collapseBtn:SetNormalTexture(cTex)
+    collapseBtn:SetNormalTexture("Interface\\Buttons\\UI-Spellbook-PageDown-Up")
+    collapseBtn:SetPushedTexture("Interface\\Buttons\\UI-Spellbook-PageDown-Down")
+    collapseBtn:SetHighlightTexture("Interface\\Buttons\\UI-Common-MouseHilight", "ADD")
+    container.CollapseButton = collapseBtn
     
     collapseBtn:SetScript("OnEnter", function(self)
         GameTooltip:SetOwner(self, "ANCHOR_RIGHT")
@@ -399,10 +401,10 @@ local function CreateCharacterView(parentFrame)
         end
         if newState then
             subPanel:Show()
-            cTex:SetTexture("Interface\\Buttons\\UI-Spellbook-PageDown-Up")
+            collapseBtn:SetNormalTexture("Interface\\Buttons\\UI-Spellbook-PageDown-Up")
         else
             subPanel:Hide()
-            cTex:SetTexture("Interface\\Buttons\\UI-Spellbook-PageUp-Up")
+            collapseBtn:SetNormalTexture("Interface\\Buttons\\UI-Spellbook-PageUp-Up")
         end
     end)
     
@@ -422,49 +424,6 @@ local function CreateCharacterView(parentFrame)
     subPanel.tabButtons = {}
     subPanel.views = {}
     
-    -- Sub-Tab Bar Icons (Centered at Top)
-    for i, tabInfo in ipairs(subTabs) do
-        local btn = CreateFrame("Button", "OnePanel_CharSubTab_" .. tabInfo.id, subTabBar)
-        btn:SetSize(32, 32)
-        btn:SetPoint("TOPLEFT", subTabBar, "TOPLEFT", 12 + (i - 1) * 42, -2)
-        
-        local bg = btn:CreateTexture(nil, "BACKGROUND")
-        bg:SetTexture("Interface\\Buttons\\UI-Quickslot2")
-        bg:SetSize(52, 52)
-        bg:SetPoint("CENTER", btn, "CENTER", 0, 0)
-        
-        local icon = btn:CreateTexture(nil, "ARTWORK")
-        icon:SetSize(28, 28)
-        icon:SetPoint("CENTER", btn, "CENTER", 0, 0)
-        icon:SetTexture(tabInfo.icon)
-        btn.Icon = icon
-        
-        local glow = btn:CreateTexture(nil, "OVERLAY")
-        glow:SetTexture("Interface\\Buttons\\CheckButtonHilight")
-        glow:SetBlendMode("ADD")
-        glow:SetAllPoints(btn)
-        glow:Hide()
-        btn.Glow = glow
-        
-        btn:SetScript("OnEnter", function(self)
-            if popupTooltip then
-                popupTooltip:ShowText(self, tabInfo.title)
-            end
-        end)
-        btn:SetScript("OnLeave", function()
-            if popupTooltip then popupTooltip:Hide() end
-        end)
-        
-        subPanel.tabButtons[tabInfo.id] = btn
-    end
-    
-    -- Level & Class Title Header (Centered under sub-tabs)
-    local levelClassText = subPanel:CreateFontString(nil, "OVERLAY", "GameFontNormalLarge")
-    levelClassText:SetPoint("TOP", subTabBar, "BOTTOM", 0, -4)
-    local lvl = UnitLevel("player") or 1
-    local cls = UnitClass("player") or ""
-    levelClassText:SetText(string.format("|cffffffffLevel %d|r |cffffcc00%s|r", lvl, cls))
-    
     -- Sub-View Content Container
     local subContentView = CreateFrame("Frame", "OnePanel_CharacterSubContentView", subPanel)
     subContentView:SetPoint("TOPLEFT", subTabBar, "BOTTOMLEFT", 0, -32)
@@ -472,7 +431,7 @@ local function CreateCharacterView(parentFrame)
     subPanel.ContentView = subContentView
     
     ---------------------------------------------------------------------------
-    -- Sub-View 1: Character Stats List (Framed Headers, Alternating Rows)
+    -- Sub-View 1: Character Stats List
     ---------------------------------------------------------------------------
     
     local statsView = CreateFrame("ScrollFrame", "OnePanel_StatsSubView", subContentView, "UIPanelScrollFrameTemplate")
@@ -495,7 +454,6 @@ local function CreateCharacterView(parentFrame)
         for _, entry in ipairs(stats) do
             if entry.header then
                 dataRowCounter = 0
-                -- Framed Section Header
                 local headerBtn = statsContent.elements[elIdx]
                 if not headerBtn then
                     headerBtn = CreateFrame("Button", nil, statsContent, "UIPanelButtonTemplate")
@@ -532,14 +490,12 @@ local function CreateCharacterView(parentFrame)
                 rowFrame:SetSize(264, 20)
                 rowFrame:SetPoint("TOPLEFT", statsContent, "TOPLEFT", 4, yOffset)
                 
-                -- Alternating Row Colors
                 if dataRowCounter % 2 == 1 then
                     rowFrame.bg:SetColorTexture(0.12, 0.12, 0.12, 0.5)
                 else
                     rowFrame.bg:SetColorTexture(0, 0, 0, 0)
                 end
                 
-                -- Resistance Icons
                 if entry.icon then
                     rowFrame.icon:SetTexture(entry.icon)
                     rowFrame.icon:Show()
@@ -580,10 +536,10 @@ local function CreateCharacterView(parentFrame)
     subPanel.views["titles"] = titlesView
     
     -- Switch Sub-Tab Handler
-    local function SwitchSubTab(tabId)
-        subPanel.activeTab = tabId
+    local function SwitchSubTab(targetTabId)
+        subPanel.activeTab = targetTabId
         for id, view in pairs(subPanel.views) do
-            if id == tabId then
+            if id == targetTabId then
                 view:Show()
                 if view.Refresh then view:Refresh() end
             else
@@ -591,7 +547,7 @@ local function CreateCharacterView(parentFrame)
             end
         end
         for id, btn in pairs(subPanel.tabButtons) do
-            if id == tabId then
+            if id == targetTabId then
                 btn.Glow:Show()
                 btn.Icon:SetVertexColor(1, 1, 1, 1)
             else
@@ -601,9 +557,53 @@ local function CreateCharacterView(parentFrame)
         end
     end
     
-    for id, btn in pairs(subPanel.tabButtons) do
-        btn:SetScript("OnClick", function() SwitchSubTab(id) end)
+    -- Sub-Tab Bar Icons (Centered at Top)
+    for i, tabInfo in ipairs(subTabs) do
+        local tabId = tabInfo.id
+        local btn = CreateFrame("Button", "OnePanel_CharSubTab_" .. tabId, subTabBar)
+        btn:SetSize(32, 32)
+        btn:SetPoint("TOPLEFT", subTabBar, "TOPLEFT", 12 + (i - 1) * 42, -2)
+        
+        local bg = btn:CreateTexture(nil, "BACKGROUND")
+        bg:SetTexture("Interface\\Buttons\\UI-Quickslot2")
+        bg:SetSize(52, 52)
+        bg:SetPoint("CENTER", btn, "CENTER", 0, 0)
+        
+        local icon = btn:CreateTexture(nil, "ARTWORK")
+        icon:SetSize(28, 28)
+        icon:SetPoint("CENTER", btn, "CENTER", 0, 0)
+        icon:SetTexture(tabInfo.icon)
+        btn.Icon = icon
+        
+        local glow = btn:CreateTexture(nil, "OVERLAY")
+        glow:SetTexture("Interface\\Buttons\\CheckButtonHilight")
+        glow:SetBlendMode("ADD")
+        glow:SetAllPoints(btn)
+        glow:Hide()
+        btn.Glow = glow
+        
+        btn:SetScript("OnEnter", function(self)
+            if popupTooltip then
+                popupTooltip:ShowText(self, tabInfo.title)
+            end
+        end)
+        btn:SetScript("OnLeave", function()
+            if popupTooltip then popupTooltip:Hide() end
+        end)
+        
+        btn:SetScript("OnClick", function()
+            SwitchSubTab(tabId)
+        end)
+        
+        subPanel.tabButtons[tabId] = btn
     end
+    
+    -- Level & Class Title Header (Centered under sub-tabs)
+    local levelClassText = subPanel:CreateFontString(nil, "OVERLAY", "GameFontNormalLarge")
+    levelClassText:SetPoint("TOP", subTabBar, "BOTTOM", 0, -4)
+    local lvl = UnitLevel("player") or 1
+    local cls = UnitClass("player") or ""
+    levelClassText:SetText(string.format("|cffffffffLevel %d|r |cffffcc00%s|r", lvl, cls))
     
     SwitchSubTab("stats")
     
