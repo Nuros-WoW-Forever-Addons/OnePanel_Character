@@ -1,0 +1,8 @@
+## Interface: 16001
+## Title: OnePanel |cff00ccffCharacter|r
+## Notes: Character Sheet equipment and 3D player portrait plugin for OnePanel Suite.
+## Author: OnePanel Suite Team
+## Version: 0.0.1
+## Dependencies: OnePanel, OnePanelUtils
+
+Core.lua
