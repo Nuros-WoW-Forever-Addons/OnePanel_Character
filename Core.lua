@@ -207,9 +207,12 @@ local function CreateCharacterView(parentFrame)
     modelVignette:SetColorTexture(0, 0, 0, 0.25)
     
     -- Central 3D Player Portrait Model
+    -- Central 3D Player Portrait Model (Matches CharacterModelScene at Frame Level 50)
     local model = CreateFrame("PlayerModel", "OnePanel_Character3DPlayerModel", leftArea)
-    model:SetSize(320, 420)
-    model:SetPoint("CENTER", leftArea, "CENTER", 0, -10)
+    model:SetSize(398, 404)
+    model:SetPoint("TOPLEFT", leftArea, "TOPLEFT", 0, 0)
+    model:SetPoint("BOTTOMRIGHT", leftArea, "BOTTOMRIGHT", 0, 0)
+    model:SetFrameLevel(50)
     model:SetUnit("player")
     model.facing = 0
     model.camScale = 1.0
@@ -287,43 +290,47 @@ local function CreateCharacterView(parentFrame)
     end)
     
     ---------------------------------------------------------------------------
-    -- 3D Model Control Toolbar (Centered at Top of Model Container)
+    -- 3D Model Control Toolbar (Matches CharacterModelScene.ControlFrame)
     ---------------------------------------------------------------------------
     
     local toolbar = CreateFrame("Frame", "OnePanel_3DModelToolbar", leftArea)
     toolbar:SetSize(130, 24)
-    toolbar:SetPoint("TOP", leftArea, "TOP", 0, -14)
-    toolbar:SetFrameLevel(leftArea:GetFrameLevel() + 20)
+    toolbar:SetPoint("TOP", leftArea, "TOP", 0, -20)
+    toolbar:SetFrameLevel(120)
     
-    local function CreateBlizzardModelButton(name, normTex, pushTex, tooltipText, onClickAction, onHoldAction)
+    local function CreateBlizzardModelButton(name, atlasUp, atlasDown, fallbackUp, fallbackDown, tooltipText, onClickAction, onHoldAction)
         local btn = CreateFrame("Button", name, toolbar)
         btn:SetSize(22, 22)
         
-        btn:SetNormalTexture(normTex)
-        if pushTex then
-            btn:SetPushedTexture(pushTex)
+        local normTex = btn:CreateTexture(nil, "ARTWORK")
+        local setUp = pcall(function() normTex:SetAtlas(atlasUp, true) end)
+        if not setUp or not normTex:GetTexture() then
+            normTex:SetTexture(fallbackUp)
         end
+        normTex:SetAllPoints(btn)
+        btn:SetNormalTexture(normTex)
+        
+        local pushTex = btn:CreateTexture(nil, "ARTWORK")
+        local setDown = pcall(function() pushTex:SetAtlas(atlasDown, true) end)
+        if not setDown or not pushTex:GetTexture() then
+            pushTex:SetTexture(fallbackDown)
+        end
+        pushTex:SetAllPoints(btn)
+        btn:SetPushedTexture(pushTex)
+        
         btn:SetHighlightTexture("Interface\\Buttons\\UI-Common-MouseHilight", "ADD")
         
         btn:SetScript("OnMouseDown", function(self, button)
-            if button == "LeftButton" then
-                self.isHolding = true
-            end
+            if button == "LeftButton" then self.isHolding = true end
         end)
         btn:SetScript("OnMouseUp", function(self, button)
-            if button == "LeftButton" then
-                self.isHolding = false
-            end
+            if button == "LeftButton" then self.isHolding = false end
         end)
         btn:SetScript("OnUpdate", function(self, elapsed)
-            if self.isHolding and onHoldAction then
-                onHoldAction(elapsed)
-            end
+            if self.isHolding and onHoldAction then onHoldAction(elapsed) end
         end)
         btn:SetScript("OnClick", function(self, button)
-            if button == "LeftButton" and onClickAction then
-                onClickAction()
-            end
+            if button == "LeftButton" and onClickAction then onClickAction() end
         end)
         
         btn:SetScript("OnEnter", function(self)
@@ -336,63 +343,64 @@ local function CreateCharacterView(parentFrame)
     end
     
     local btnZoomIn = CreateBlizzardModelButton("OnePanel_BtnZoomIn", 
-        "Interface\\Buttons\\UI-PlusButton-Up",
-        "Interface\\Buttons\\UI-PlusButton-Down",
+        "UI-HUD-ModelScene-ZoomIn-Up", "UI-HUD-ModelScene-ZoomIn-Down",
+        "Interface\\Buttons\\UI-PlusButton-Up", "Interface\\Buttons\\UI-PlusButton-Down",
         "Zoom In", 
         function() ZoomModel(-0.08) end,
         function(elapsed) ZoomModel(-0.5 * elapsed) end)
     btnZoomIn:SetPoint("LEFT", toolbar, "LEFT", 0, 0)
     
     local btnZoomOut = CreateBlizzardModelButton("OnePanel_BtnZoomOut", 
-        "Interface\\Buttons\\UI-MinusButton-Up",
-        "Interface\\Buttons\\UI-MinusButton-Down",
+        "UI-HUD-ModelScene-ZoomOut-Up", "UI-HUD-ModelScene-ZoomOut-Down",
+        "Interface\\Buttons\\UI-MinusButton-Up", "Interface\\Buttons\\UI-MinusButton-Down",
         "Zoom Out", 
         function() ZoomModel(0.08) end,
         function(elapsed) ZoomModel(0.5 * elapsed) end)
     btnZoomOut:SetPoint("LEFT", btnZoomIn, "RIGHT", 4, 0)
     
     local btnRotLeft = CreateBlizzardModelButton("OnePanel_BtnRotLeft", 
-        "Interface\\Buttons\\UI-RotationLeft-Button-Up",
-        "Interface\\Buttons\\UI-RotationLeft-Button-Down",
+        "UI-HUD-ModelScene-RotateLeft-Up", "UI-HUD-ModelScene-RotateLeft-Down",
+        "Interface\\Buttons\\UI-RotationLeft-Button-Up", "Interface\\Buttons\\UI-RotationLeft-Button-Down",
         "Rotate Left", 
         function() RotateModel(-0.15) end,
         function(elapsed) RotateModel(-1.8 * elapsed) end)
     btnRotLeft:SetPoint("LEFT", btnZoomOut, "RIGHT", 4, 0)
     
     local btnRotRight = CreateBlizzardModelButton("OnePanel_BtnRotRight", 
-        "Interface\\Buttons\\UI-RotationRight-Button-Up",
-        "Interface\\Buttons\\UI-RotationRight-Button-Down",
+        "UI-HUD-ModelScene-RotateRight-Up", "UI-HUD-ModelScene-RotateRight-Down",
+        "Interface\\Buttons\\UI-RotationRight-Button-Up", "Interface\\Buttons\\UI-RotationRight-Button-Down",
         "Rotate Right", 
         function() RotateModel(0.15) end,
         function(elapsed) RotateModel(1.8 * elapsed) end)
     btnRotRight:SetPoint("LEFT", btnRotLeft, "RIGHT", 4, 0)
     
     local btnReset = CreateBlizzardModelButton("OnePanel_BtnReset", 
-        "Interface\\Buttons\\UI-RefreshButton",
-        "Interface\\Buttons\\UI-RefreshButton",
+        "UI-HUD-ModelScene-Reset-Up", "UI-HUD-ModelScene-Reset-Down",
+        "Interface\\Buttons\\UI-RefreshButton", "Interface\\Buttons\\UI-RefreshButton",
         "Reset Model & Camera", 
         function() ResetModel() end,
         nil)
     btnReset:SetPoint("LEFT", btnRotRight, "RIGHT", 4, 0)
     
     ---------------------------------------------------------------------------
-    -- Equipment Slot Buttons
+    -- Equipment Slot Buttons (Matches Native Anchors & Frame Level 101)
     ---------------------------------------------------------------------------
     
     local function CreateSlotButton(slotInfo, relativeTo, point, relPoint, x, y)
         local btn = CreateFrame("Button", "OnePanel_EqSlot_" .. slotInfo.id, leftArea)
-        btn:SetSize(38, 38)
+        btn:SetSize(37, 37)
         btn:SetPoint(point, relativeTo, relPoint, x, y)
+        btn:SetFrameLevel(101)
         btn.slotId = slotInfo.id
         
         local bg = btn:CreateTexture(nil, "BACKGROUND")
         bg:SetTexture("Interface\\Buttons\\UI-Quickslot2")
-        bg:SetSize(60, 60)
+        bg:SetSize(58, 58)
         bg:SetPoint("CENTER", btn, "CENTER", 0, 0)
         btn.BG = bg
         
         local icon = btn:CreateTexture(nil, "ARTWORK")
-        icon:SetSize(34, 34)
+        icon:SetSize(37, 37)
         icon:SetPoint("CENTER", btn, "CENTER", 0, 0)
         icon:SetTexture(slotInfo.icon)
         btn.Icon = icon
@@ -419,23 +427,23 @@ local function CreateCharacterView(parentFrame)
     
     local prevBtn = leftArea
     for i, slotInfo in ipairs(EquipmentSlotsLeft) do
-        local btn = (i == 1) and CreateSlotButton(slotInfo, leftArea, "TOPLEFT", "TOPLEFT", 12, -20)
-                             or CreateSlotButton(slotInfo, prevBtn, "TOPLEFT", "BOTTOMLEFT", 0, -8)
+        local btn = (i == 1) and CreateSlotButton(slotInfo, leftArea, "TOPLEFT", "TOPLEFT", 24, -60)
+                             or CreateSlotButton(slotInfo, prevBtn, "TOPLEFT", "BOTTOMLEFT", 0, -4)
         prevBtn = btn
         container.slots[slotInfo.id] = btn
     end
     
     prevBtn = leftArea
     for i, slotInfo in ipairs(EquipmentSlotsRight) do
-        local btn = (i == 1) and CreateSlotButton(slotInfo, leftArea, "TOPRIGHT", "TOPRIGHT", -12, -20)
-                             or CreateSlotButton(slotInfo, prevBtn, "TOPRIGHT", "BOTTOMRIGHT", 0, -8)
+        local btn = (i == 1) and CreateSlotButton(slotInfo, leftArea, "TOPRIGHT", "TOPRIGHT", -20, -60)
+                             or CreateSlotButton(slotInfo, prevBtn, "TOPRIGHT", "BOTTOMRIGHT", 0, -4)
         prevBtn = btn
         container.slots[slotInfo.id] = btn
     end
     
-    local mainHand = CreateSlotButton(EquipmentSlotsBottom[1], model, "BOTTOM", "BOTTOM", -46, 5)
-    local offHand  = CreateSlotButton(EquipmentSlotsBottom[2], model, "BOTTOM", "BOTTOM", 0, 5)
-    local ranged   = CreateSlotButton(EquipmentSlotsBottom[3], model, "BOTTOM", "BOTTOM", 46, 5)
+    local mainHand = CreateSlotButton(EquipmentSlotsBottom[1], leftArea, "BOTTOM", "BOTTOM", -40, 30)
+    local offHand  = CreateSlotButton(EquipmentSlotsBottom[2], leftArea, "BOTTOM", "BOTTOM", 0, 30)
+    local ranged   = CreateSlotButton(EquipmentSlotsBottom[3], leftArea, "BOTTOM", "BOTTOM", 40, 30)
     container.slots[16] = mainHand
     container.slots[17] = offHand
     container.slots[18] = ranged
