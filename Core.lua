@@ -795,6 +795,9 @@ local function RegisterPlugin()
                     SetPortraitTexture(btn.Icon, "player")
                 end
             end
+            if OnePanel and OnePanel.SetHeaderPortrait then
+                OnePanel:SetHeaderPortrait(nil, nil, false)
+            end
         end,
         OnHide = function(container)
         end
