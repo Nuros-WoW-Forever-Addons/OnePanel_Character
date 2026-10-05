@@ -173,9 +173,10 @@ local function CreateCharacterView(parentFrame)
     -- Race-Specific Character Background Art
     local _, raceFile = UnitRace("player")
     raceFile = raceFile or "NightElf"
-    local bgTexturePath = "Interface\\DressUpFrame\\DressUpBackground-" .. raceFile
+    if raceFile == "Scourge" then raceFile = "Scourge" end
+    local bgTexturePath = "Interface\\PaperDollHeaderFooters\\UI-PaperDoll-Background-" .. raceFile
     
-    local modelBg = leftArea:CreateTexture(nil, "BACKGROUND")
+    local modelBg = leftArea:CreateTexture(nil, "BACKGROUND", nil, -7)
     modelBg:SetPoint("TOPLEFT", leftArea, "TOPLEFT", 10, -10)
     modelBg:SetPoint("BOTTOMRIGHT", leftArea, "BOTTOMRIGHT", -10, 10)
     modelBg:SetTexture(bgTexturePath)
@@ -231,16 +232,17 @@ local function CreateCharacterView(parentFrame)
     end)
     
     ---------------------------------------------------------------------------
-    -- 3D Model Control Toolbar (Centered Above Portrait)
+    -- 3D Model Control Toolbar (Centered at Top of Model Container)
     ---------------------------------------------------------------------------
     
     local toolbar = CreateFrame("Frame", "OnePanel_3DModelToolbar", leftArea)
-    toolbar:SetSize(160, 26)
-    toolbar:SetPoint("TOP", model, "TOP", 0, -10)
+    toolbar:SetSize(130, 24)
+    toolbar:SetPoint("TOP", leftArea, "TOP", 0, -14)
+    toolbar:SetFrameLevel(leftArea:GetFrameLevel() + 20)
     
     local function CreateBlizzardModelButton(name, normalTex, pushedTex, tooltipText, onClick)
         local btn = CreateFrame("Button", name, toolbar)
-        btn:SetSize(24, 24)
+        btn:SetSize(22, 22)
         btn:SetNormalTexture(normalTex)
         if pushedTex then btn:SetPushedTexture(pushedTex) end
         btn:SetHighlightTexture("Interface\\Buttons\\UI-Common-MouseHilight", "ADD")
@@ -256,8 +258,8 @@ local function CreateCharacterView(parentFrame)
     end
     
     local btnZoomIn = CreateBlizzardModelButton("OnePanel_BtnZoomIn", 
-        "Interface\\Buttons\\UI-Minimap-ZoomIn-Button-Up",
-        "Interface\\Buttons\\UI-Minimap-ZoomIn-Button-Down",
+        "Interface\\Minimap\\UI-Minimap-ZoomIn-Up",
+        "Interface\\Minimap\\UI-Minimap-ZoomIn-Down",
         "Zoom In", function()
             model.camScale = math.max(0.4, model.camScale - 0.15)
             if model.SetCamDistanceScale then model:SetCamDistanceScale(model.camScale) end
@@ -265,13 +267,13 @@ local function CreateCharacterView(parentFrame)
     btnZoomIn:SetPoint("LEFT", toolbar, "LEFT", 0, 0)
     
     local btnZoomOut = CreateBlizzardModelButton("OnePanel_BtnZoomOut", 
-        "Interface\\Buttons\\UI-Minimap-ZoomOut-Button-Up",
-        "Interface\\Buttons\\UI-Minimap-ZoomOut-Button-Down",
+        "Interface\\Minimap\\UI-Minimap-ZoomOut-Up",
+        "Interface\\Minimap\\UI-Minimap-ZoomOut-Down",
         "Zoom Out", function()
             model.camScale = math.min(2.5, model.camScale + 0.15)
             if model.SetCamDistanceScale then model:SetCamDistanceScale(model.camScale) end
         end)
-    btnZoomOut:SetPoint("LEFT", btnZoomIn, "RIGHT", 4, 0)
+    btnZoomOut:SetPoint("LEFT", btnZoomIn, "RIGHT", 3, 0)
     
     local btnRotLeft = CreateBlizzardModelButton("OnePanel_BtnRotLeft", 
         "Interface\\Buttons\\UI-RotationLeft-Button-Up",
@@ -279,7 +281,7 @@ local function CreateCharacterView(parentFrame)
         "Rotate Left", function()
             RotateModel(-0.3)
         end)
-    btnRotLeft:SetPoint("LEFT", btnZoomOut, "RIGHT", 4, 0)
+    btnRotLeft:SetPoint("LEFT", btnZoomOut, "RIGHT", 3, 0)
     
     local btnRotRight = CreateBlizzardModelButton("OnePanel_BtnRotRight", 
         "Interface\\Buttons\\UI-RotationRight-Button-Up",
@@ -287,7 +289,7 @@ local function CreateCharacterView(parentFrame)
         "Rotate Right", function()
             RotateModel(0.3)
         end)
-    btnRotRight:SetPoint("LEFT", btnRotLeft, "RIGHT", 4, 0)
+    btnRotRight:SetPoint("LEFT", btnRotLeft, "RIGHT", 3, 0)
     
     local btnReset = CreateBlizzardModelButton("OnePanel_BtnReset", 
         "Interface\\Buttons\\UI-RefreshButton",
@@ -299,7 +301,7 @@ local function CreateCharacterView(parentFrame)
             if model.SetFacing then model:SetFacing(0) elseif model.SetRotation then model:SetRotation(0) end
             model:SetUnit("player")
         end)
-    btnReset:SetPoint("LEFT", btnRotRight, "RIGHT", 4, 0)
+    btnReset:SetPoint("LEFT", btnRotRight, "RIGHT", 3, 0)
     
     ---------------------------------------------------------------------------
     -- Equipment Slot Buttons
@@ -384,12 +386,13 @@ local function CreateCharacterView(parentFrame)
     end
     container.SubPanel = subPanel
     
-    -- Visible Collapsible Arrow Button above Hands Slot
-    local collapseBtn = CreateFrame("Button", "OnePanel_CollapseButton", leftArea)
-    collapseBtn:SetSize(24, 24)
-    collapseBtn:SetPoint("TOPRIGHT", leftArea, "TOPRIGHT", -12, -14)
-    collapseBtn:SetNormalTexture("Interface\\Buttons\\UI-Spellbook-PageDown-Up")
-    collapseBtn:SetPushedTexture("Interface\\Buttons\\UI-Spellbook-PageDown-Down")
+    -- Visible Collapsible Arrow Button above right equipment slots
+    local collapseBtn = CreateFrame("Button", "OnePanel_CollapseButton", container)
+    collapseBtn:SetSize(22, 22)
+    collapseBtn:SetPoint("TOPRIGHT", leftArea, "TOPRIGHT", -8, -14)
+    collapseBtn:SetFrameLevel(subPanel:GetFrameLevel() + 20)
+    collapseBtn:SetNormalTexture("Interface\\Buttons\\UI-SpellbookSearch-DrillDown")
+    collapseBtn:SetPushedTexture("Interface\\Buttons\\UI-SpellbookSearch-DrillDown")
     collapseBtn:SetHighlightTexture("Interface\\Buttons\\UI-Common-MouseHilight", "ADD")
     container.CollapseButton = collapseBtn
     
@@ -408,10 +411,10 @@ local function CreateCharacterView(parentFrame)
         end
         if newState then
             subPanel:Show()
-            collapseBtn:SetNormalTexture("Interface\\Buttons\\UI-Spellbook-PageDown-Up")
+            collapseBtn:SetNormalTexture("Interface\\Buttons\\UI-SpellbookSearch-DrillDown")
         else
             subPanel:Hide()
-            collapseBtn:SetNormalTexture("Interface\\Buttons\\UI-Spellbook-PageUp-Up")
+            collapseBtn:SetNormalTexture("Interface\\Buttons\\UI-SpellbookSearch-DrillDown")
         end
     end)
     
@@ -422,9 +425,9 @@ local function CreateCharacterView(parentFrame)
     subTabBar:SetHeight(38)
     
     local subTabs = {
-        { id = "stats",   title = "Character Stats",   icon = "Interface\\Icons\\Paperdoll_Stat_Strength" },
-        { id = "outfits", title = "Equipment Manager", icon = "Interface\\Icons\\INV_Armor_Chest_Plate_06" },
-        { id = "titles",  title = "Titles",            icon = "Interface\\Icons\\INV_Scroll_03" },
+        { id = "stats",   title = "Character Stats",   usePortrait = true },
+        { id = "outfits", title = "Equipment Manager", icon = "Interface\\PaperDollInfoFrame\\UI-EquipmentManager-Toggle" },
+        { id = "titles",  title = "Titles",            icon = "Interface\\Icons\\INV_Scroll_11" },
     }
     
     subPanel.activeTab = "stats"
@@ -581,7 +584,13 @@ local function CreateCharacterView(parentFrame)
         local icon = btn:CreateTexture(nil, "ARTWORK")
         icon:SetSize(28, 28)
         icon:SetPoint("CENTER", btn, "CENTER", 0, 0)
-        icon:SetTexture(tabInfo.icon)
+        
+        if tabInfo.usePortrait then
+            SetPortraitTexture(icon, "player")
+            btn.isPortrait = true
+        else
+            icon:SetTexture(tabInfo.icon)
+        end
         btn.Icon = icon
         
         local glow = btn:CreateTexture(nil, "OVERLAY")
@@ -649,8 +658,13 @@ local function CreateCharacterView(parentFrame)
         if event == "PLAYER_EQUIPMENT_CHANGED" or event == "UNIT_STATS" or event == "PLAYER_DAMAGE_DONE_MODS" then
             self:UpdateEquipment()
             if self.Model then self.Model:SetUnit("player") end
-        elseif event == "UNIT_MODEL_CHANGED" and arg1 == "player" then
-            if self.Model then self.Model:SetUnit("player") end
+        elseif event == "UNIT_MODEL_CHANGED" or event == "UNIT_PORTRAIT_UPDATE" then
+            if arg1 == "player" or arg1 == nil then
+                if self.Model then self.Model:SetUnit("player") end
+                if subPanel.tabButtons["stats"] and subPanel.tabButtons["stats"].isPortrait then
+                    SetPortraitTexture(subPanel.tabButtons["stats"].Icon, "player")
+                end
+            end
         end
     end)
     
@@ -658,6 +672,7 @@ local function CreateCharacterView(parentFrame)
     container:RegisterEvent("UNIT_STATS")
     container:RegisterEvent("PLAYER_DAMAGE_DONE_MODS")
     container:RegisterEvent("UNIT_MODEL_CHANGED")
+    container:RegisterEvent("UNIT_PORTRAIT_UPDATE")
     
     return container
 end
@@ -682,6 +697,12 @@ local function RegisterPlugin()
             end
             if container and container.UpdateEquipment then
                 container:UpdateEquipment()
+            end
+            if container and container.SubPanel and container.SubPanel.tabButtons and container.SubPanel.tabButtons["stats"] then
+                local btn = container.SubPanel.tabButtons["stats"]
+                if btn.isPortrait and btn.Icon then
+                    SetPortraitTexture(btn.Icon, "player")
+                end
             end
         end,
         OnHide = function(container)
