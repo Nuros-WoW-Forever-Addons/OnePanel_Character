@@ -55,60 +55,80 @@ local function FetchPlayerStats()
     
     -- General Stats
     table.insert(stats, { header = "General" })
-    table.insert(stats, { label = "Health:", val = tostring(UnitHealthMax("player") or 0) })
     
-    local powerType, powerToken = UnitPowerType("player")
-    local powerMax = UnitPowerMax("player") or 0
-    local powerLabel = powerToken and (powerToken:sub(1,1):upper() .. powerToken:sub(2):lower() .. ":") or "Power:"
-    table.insert(stats, { label = powerLabel, val = tostring(powerMax) })
+    local okHp, maxHp = pcall(UnitHealthMax, "player")
+    table.insert(stats, { label = "Health:", val = okHp and tostring(maxHp or 0) or "0" })
     
-    local rawSpeed = GetUnitSpeed and GetUnitSpeed("player") or 7
-    local speed = math.floor((rawSpeed or 7) / 7 * 100 + 0.5)
-    table.insert(stats, { label = "Movement Speed:", val = speed .. "%" })
+    local okType, powerType, powerToken = pcall(UnitPowerType, "player")
+    local powerLabel = (okType and powerToken) and (powerToken:sub(1,1):upper() .. powerToken:sub(2):lower() .. ":") or "Power:"
+    local okPower, maxPower = pcall(UnitPowerMax, "player")
+    table.insert(stats, { label = powerLabel, val = okPower and tostring(maxPower or 0) or "0" })
+    
+    local okSpeed, speedStr = pcall(function()
+        local rawSpeed = GetUnitSpeed and GetUnitSpeed("player")
+        if not rawSpeed then return "100%" end
+        local speed = math.floor((rawSpeed / 7) * 100 + 0.5)
+        return speed .. "%"
+    end)
+    table.insert(stats, { label = "Movement Speed:", val = okSpeed and speedStr or "100%" })
     
     -- Primary Attributes
     table.insert(stats, { header = "Primary Attributes" })
     local statNames = { "Strength:", "Agility:", "Stamina:", "Intellect:", "Spirit:" }
     for i = 1, 5 do
-        local _, stat = UnitStat("player", i)
-        table.insert(stats, { label = statNames[i], val = tostring(stat or 0) })
+        local okStat, _, stat = pcall(UnitStat, "player", i)
+        local valStr = (okStat and stat) and tostring(stat) or "0"
+        table.insert(stats, { label = statNames[i], val = valStr })
     end
     
     -- Weapons
     table.insert(stats, { header = "Weapons" })
-    local minDmg, maxDmg = UnitDamage("player")
-    minDmg = math.floor(minDmg or 0)
-    maxDmg = math.floor(maxDmg or 0)
-    table.insert(stats, { label = "Main Hand:", val = minDmg .. " - " .. maxDmg })
+    local okDmg, dmgStr = pcall(function()
+        local minDmg, maxDmg = UnitDamage("player")
+        return math.floor(minDmg or 0) .. " - " .. math.floor(maxDmg or 0)
+    end)
+    table.insert(stats, { label = "Main Hand:", val = okDmg and dmgStr or "0 - 0" })
     
-    local baseAP, posAP, negAP = UnitAttackPower("player")
-    local ap = (baseAP or 0) + (posAP or 0) + (negAP or 0)
-    table.insert(stats, { label = "Attack Power:", val = tostring(ap) })
+    local okAP, apStr = pcall(function()
+        local baseAP, posAP, negAP = UnitAttackPower("player")
+        local ap = (baseAP or 0) + (posAP or 0) + (negAP or 0)
+        return tostring(ap)
+    end)
+    table.insert(stats, { label = "Attack Power:", val = okAP and apStr or "0" })
     
     -- Modifiers
     table.insert(stats, { header = "Modifiers" })
-    local crit = (GetCritChance and GetCritChance()) or 0
-    local critVal = (type(crit) == "number") and crit or 0
-    table.insert(stats, { label = "Critical Strike:", val = string.format("%.1f%%", critVal) })
+    local okCrit, critStr = pcall(function()
+        local crit = GetCritChance and GetCritChance()
+        return string.format("%.1f%%", crit or 0)
+    end)
+    table.insert(stats, { label = "Critical Strike:", val = okCrit and critStr or "0.0%" })
     
-    local haste = (GetHaste and GetHaste()) or 0
-    local hasteVal = (type(haste) == "number") and haste or 0
-    table.insert(stats, { label = "Haste:", val = string.format("%.1f%%", hasteVal) })
+    local okHaste, hasteStr = pcall(function()
+        local haste = GetHaste and GetHaste()
+        return string.format("%.1f%%", haste or 0)
+    end)
+    table.insert(stats, { label = "Haste:", val = okHaste and hasteStr or "0.0%" })
     
     -- Defense
     table.insert(stats, { header = "Defense" })
-    local dodge = (GetDodgeChance and GetDodgeChance()) or 0
-    local dodgeVal = (type(dodge) == "number") and dodge or 0
-    table.insert(stats, { label = "Dodge:", val = string.format("%.1f%%", dodgeVal) })
+    local okDodge, dodgeStr = pcall(function()
+        local dodge = GetDodgeChance and GetDodgeChance()
+        return string.format("%.1f%%", dodge or 0)
+    end)
+    table.insert(stats, { label = "Dodge:", val = okDodge and dodgeStr or "0.0%" })
     
-    local _, effectiveArmor = UnitArmor("player")
-    table.insert(stats, { label = "Armor:", val = tostring(effectiveArmor or 0) })
+    local okArmor, armorStr = pcall(function()
+        local _, effectiveArmor = UnitArmor("player")
+        return tostring(effectiveArmor or 0)
+    end)
+    table.insert(stats, { label = "Armor:", val = okArmor and armorStr or "0" })
     
     -- Resistances (Wrapped in pcall for safety)
     table.insert(stats, { header = "Resistances" })
     for _, res in ipairs(ResistanceSchools) do
-        local ok, baseRes = pcall(UnitResistance, "player", res.id)
-        local valStr = (ok and type(baseRes) == "number") and tostring(baseRes) or "0"
+        local okRes, baseRes = pcall(UnitResistance, "player", res.id)
+        local valStr = (okRes and type(baseRes) == "number") and tostring(baseRes) or "0"
         table.insert(stats, { label = res.name .. ":", val = valStr, icon = res.icon })
     end
     
