@@ -194,13 +194,13 @@ local function CreateCharacterView(parentFrame)
     local bgContainer = CreateFrame("Frame", "OnePanel_CharacterBgContainer", leftArea)
     bgContainer:SetClipsChildren(true)
     
-    -- Nudger State Controls
+    -- Nudger State Controls (Defaulted to verified pixel-perfect frame boundaries)
     local nudgeState = {
-        topInset = 0,
-        leftInset = 0,
-        bottomInset = 0,
-        rightInset = 0,
-        splitRatio = 0.72,
+        topInset = -5,
+        leftInset = 5,
+        bottomInset = -13,
+        rightInset = 3,
+        splitRatio = 0.90,
         overlayAlpha = 0.40
     }
     
@@ -409,9 +409,9 @@ local function CreateCharacterView(parentFrame)
     end
     
     -- Central 3D Player Portrait Model (Matches CharacterModelScene at Frame Level 50)
-    local model = CreateFrame("PlayerModel", "OnePanel_Character3DPlayerModel", bgContainer)
-    model:SetPoint("TOPLEFT", bgContainer, "TOPLEFT", 0, 0)
-    model:SetPoint("BOTTOMRIGHT", bgContainer, "BOTTOMRIGHT", 0, 0)
+    local model = CreateFrame("PlayerModel", "OnePanel_Character3DPlayerModel", leftArea)
+    model:SetPoint("TOPLEFT", leftArea, "TOPLEFT", 0, 0)
+    model:SetPoint("BOTTOMRIGHT", leftArea, "BOTTOMRIGHT", 0, 0)
     model:SetFrameLevel(50)
     container.Model = model
     
