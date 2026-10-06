@@ -216,6 +216,7 @@ local function CreateCharacterView(parentFrame)
     model:SetUnit("player")
     model.facing = 0
     model.camScale = 1.0
+    model.targetCamScale = 1.0
     container.Model = model
     
     -- Safe Rotation Helper
@@ -229,17 +230,11 @@ local function CreateCharacterView(parentFrame)
         end
     end
 
-    -- Safe Zoom Helper
+    -- Safe Zoom Helper (Fine-grained Target Scale)
     local function ZoomModel(delta)
         if not model then return end
-        model.camScale = math.max(0.35, math.min(2.5, (model.camScale or 1.0) + delta))
-        if model.SetCamDistanceScale then
-            pcall(function() model:SetCamDistanceScale(model.camScale) end)
-        end
-        if model.SetPortraitZoom then
-            local pZoom = math.max(0, math.min(1, (1.0 - model.camScale) / 0.65))
-            pcall(function() model:SetPortraitZoom(pZoom) end)
-        end
+        local currentTarget = model.targetCamScale or model.camScale or 1.0
+        model.targetCamScale = math.max(0.35, math.min(2.5, currentTarget + delta))
     end
     
     -- Safe Reset Helper
@@ -247,6 +242,7 @@ local function CreateCharacterView(parentFrame)
         if not model then return end
         model.facing = 0
         model.camScale = 1.0
+        model.targetCamScale = 1.0
         if model.SetFacing then
             pcall(function() model:SetFacing(0) end)
         elseif model.SetRotation then
@@ -261,7 +257,7 @@ local function CreateCharacterView(parentFrame)
         pcall(function() model:SetUnit("player") end)
     end
     
-    -- Interactive Mouse Drag Rotation & Scroll Wheel Zoom
+    -- Interactive Mouse Drag Rotation & Scroll Wheel Zoom with Target Lerp
     model:EnableMouse(true)
     model:EnableMouseWheel(true)
     model:SetScript("OnMouseDown", function(self, button)
@@ -275,17 +271,34 @@ local function CreateCharacterView(parentFrame)
     end)
     model:SetScript("OnMouseWheel", function(self, delta)
         if delta > 0 then
-            ZoomModel(-0.08)
+            ZoomModel(-0.03)
         else
-            ZoomModel(0.08)
+            ZoomModel(0.03)
         end
     end)
-    model:SetScript("OnUpdate", function(self)
+    model:SetScript("OnUpdate", function(self, elapsed)
         if self.isRotating then
             local currentX = GetCursorPosition()
             local diff = (currentX - self.prevCursorX) * 0.01
             RotateModel(diff)
             self.prevCursorX = currentX
+        end
+        
+        -- Smooth Zoom Lerp Interpolation
+        if self.targetCamScale then
+            local curScale = self.camScale or 1.0
+            if math.abs(curScale - self.targetCamScale) > 0.0005 then
+                local newScale = curScale + (self.targetCamScale - curScale) * math.min(1.0, elapsed * 12)
+                self.camScale = newScale
+                
+                if self.SetCamDistanceScale then
+                    pcall(function() self:SetCamDistanceScale(newScale) end)
+                end
+                if self.SetPortraitZoom then
+                    local pZoom = math.max(0, math.min(1, (1.0 - newScale) / 0.65))
+                    pcall(function() self:SetPortraitZoom(pZoom) end)
+                end
+            end
         end
     end)
     
@@ -375,15 +388,15 @@ local function CreateCharacterView(parentFrame)
     local btnZoomIn = CreateBlizzardModelButton("OnePanel_BtnZoomIn", 
         "common-icon-zoomin", "Interface\\Buttons\\UI-PlusButton-Up",
         "Zoom In", 
-        function() ZoomModel(-0.08) end,
-        function(elapsed) ZoomModel(-0.6 * elapsed) end)
+        function() ZoomModel(-0.03) end,
+        function(elapsed) ZoomModel(-0.35 * elapsed) end)
     btnZoomIn:SetPoint("LEFT", toolbar, "LEFT", 0, 0)
     
     local btnZoomOut = CreateBlizzardModelButton("OnePanel_BtnZoomOut", 
         "common-icon-zoomout", "Interface\\Buttons\\UI-MinusButton-Up",
         "Zoom Out", 
-        function() ZoomModel(0.08) end,
-        function(elapsed) ZoomModel(0.6 * elapsed) end)
+        function() ZoomModel(0.03) end,
+        function(elapsed) ZoomModel(0.35 * elapsed) end)
     btnZoomOut:SetPoint("LEFT", btnZoomIn, "RIGHT", 4, 0)
     
     local btnRotLeft = CreateBlizzardModelButton("OnePanel_BtnRotLeft", 
