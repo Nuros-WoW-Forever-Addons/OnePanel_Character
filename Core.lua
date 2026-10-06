@@ -242,18 +242,78 @@ local function CreateCharacterView(parentFrame)
     container.UpdateRaceBackgroundArt = UpdateRaceBackgroundArt
     UpdateRaceBackgroundArt()
     
-    -- Central 3D Player Portrait Model
     -- Central 3D Player Portrait Model (Matches CharacterModelScene at Frame Level 50)
     local model = CreateFrame("PlayerModel", "OnePanel_Character3DPlayerModel", leftArea)
     model:SetSize(398, 404)
     model:SetPoint("TOPLEFT", leftArea, "TOPLEFT", 0, 0)
     model:SetPoint("BOTTOMRIGHT", leftArea, "BOTTOMRIGHT", 0, 0)
     model:SetFrameLevel(50)
-    model:SetUnit("player")
-    model.facing = 0
-    model.camScale = 1.0
-    model.targetCamScale = 1.0
     container.Model = model
+    
+    -- Form-aware Model Refresh & Camera/Scale Setup
+    local function RefreshPlayerModel()
+        if not model then return end
+        pcall(function() model:SetUnit("player") end)
+        
+        local baseCamScale = 1.0
+        local basePosY = 0
+        local basePosZ = 0
+        
+        local form = GetShapeshiftForm and GetShapeshiftForm()
+        if form and form > 0 then
+            local formID = GetShapeshiftFormID and GetShapeshiftFormID()
+            local powerType = UnitPowerType and UnitPowerType("player")
+            
+            -- Detect form type
+            if formID == 1 or (Enum and Enum.PowerType and powerType == Enum.PowerType.Rage) then
+                -- Bear form: Large quadruped
+                baseCamScale = 1.65
+                basePosY = -0.15
+            elseif formID == 5 or (Enum and Enum.PowerType and powerType == Enum.PowerType.Energy) then
+                -- Cat form: Lower, sleeker quadruped
+                baseCamScale = 1.30
+                basePosY = -0.10
+            elseif formID == 31 then
+                -- Moonkin form: Bulky biped
+                baseCamScale = 1.45
+                basePosY = -0.10
+            elseif formID == 3 or formID == 4 or formID == 27 then
+                -- Travel forms (Stag, Aquatic, Flight)
+                baseCamScale = 1.55
+                basePosY = -0.15
+            elseif formID == 2 then
+                -- Tree of Life
+                baseCamScale = 1.40
+            else
+                -- Fallback for other shapeshift forms
+                baseCamScale = 1.40
+                basePosY = -0.10
+            end
+        end
+        
+        model.baseCamScale = baseCamScale
+        model.camScale = baseCamScale
+        model.targetCamScale = baseCamScale
+        model.facing = 0
+        
+        if model.SetFacing then
+            pcall(function() model:SetFacing(0) end)
+        elseif model.SetRotation then
+            pcall(function() model:SetRotation(0) end)
+        end
+        if model.SetCamDistanceScale then
+            pcall(function() model:SetCamDistanceScale(baseCamScale) end)
+        end
+        if model.SetPosition then
+            pcall(function() model:SetPosition(0, basePosY, basePosZ) end)
+        end
+        if model.SetPortraitZoom then
+            pcall(function() model:SetPortraitZoom(0) end)
+        end
+    end
+    
+    container.RefreshPlayerModel = RefreshPlayerModel
+    RefreshPlayerModel()
     
     -- Safe Rotation Helper
     local function RotateModel(delta)
@@ -269,28 +329,14 @@ local function CreateCharacterView(parentFrame)
     -- Safe Zoom Helper (Fine-grained Target Scale)
     local function ZoomModel(delta)
         if not model then return end
-        local currentTarget = model.targetCamScale or model.camScale or 1.0
-        model.targetCamScale = math.max(0.35, math.min(2.5, currentTarget + delta))
+        local base = model.baseCamScale or 1.0
+        local currentTarget = model.targetCamScale or model.camScale or base
+        model.targetCamScale = math.max(0.35 * base, math.min(2.5 * base, currentTarget + delta))
     end
     
     -- Safe Reset Helper
     local function ResetModel()
-        if not model then return end
-        model.facing = 0
-        model.camScale = 1.0
-        model.targetCamScale = 1.0
-        if model.SetFacing then
-            pcall(function() model:SetFacing(0) end)
-        elseif model.SetRotation then
-            pcall(function() model:SetRotation(0) end)
-        end
-        if model.SetCamDistanceScale then
-            pcall(function() model:SetCamDistanceScale(1.0) end)
-        end
-        if model.SetPortraitZoom then
-            pcall(function() model:SetPortraitZoom(0) end)
-        end
-        pcall(function() model:SetUnit("player") end)
+        RefreshPlayerModel()
     end
     
     -- Interactive Mouse Drag Rotation & Scroll Wheel Zoom with Target Lerp
@@ -322,7 +368,8 @@ local function CreateCharacterView(parentFrame)
         
         -- Smooth Zoom Lerp Interpolation
         if self.targetCamScale then
-            local curScale = self.camScale or 1.0
+            local base = self.baseCamScale or 1.0
+            local curScale = self.camScale or base
             if math.abs(curScale - self.targetCamScale) > 0.0005 then
                 local newScale = curScale + (self.targetCamScale - curScale) * math.min(1.0, elapsed * 12)
                 self.camScale = newScale
@@ -331,7 +378,7 @@ local function CreateCharacterView(parentFrame)
                     pcall(function() self:SetCamDistanceScale(newScale) end)
                 end
                 if self.SetPortraitZoom then
-                    local pZoom = math.max(0, math.min(1, (1.0 - newScale) / 0.65))
+                    local pZoom = math.max(0, math.min(1, (base - newScale) / (base * 0.65)))
                     pcall(function() self:SetPortraitZoom(pZoom) end)
                 end
             end
@@ -963,10 +1010,10 @@ local function CreateCharacterView(parentFrame)
     container:SetScript("OnEvent", function(self, event, arg1)
         if event == "PLAYER_EQUIPMENT_CHANGED" or event == "UNIT_STATS" or event == "PLAYER_DAMAGE_DONE_MODS" or event == "ITEM_LOCK_CHANGED" or event == "CURSOR_CHANGED" then
             self:UpdateEquipment()
-            if self.Model then self.Model:SetUnit("player") end
-        elseif event == "UNIT_MODEL_CHANGED" or event == "UNIT_PORTRAIT_UPDATE" then
+            if self.RefreshPlayerModel then self:RefreshPlayerModel() end
+        elseif event == "UNIT_MODEL_CHANGED" or event == "UNIT_PORTRAIT_UPDATE" or event == "UPDATE_SHAPESHIFT_FORM" or event == "UPDATE_SHAPESHIFT_FORMS" then
             if arg1 == "player" or arg1 == nil then
-                if self.Model then self.Model:SetUnit("player") end
+                if self.RefreshPlayerModel then self:RefreshPlayerModel() end
                 if subPanel.tabButtons["stats"] and subPanel.tabButtons["stats"].isPortrait then
                     SetPortraitTexture(subPanel.tabButtons["stats"].Icon, "player")
                 end
@@ -979,6 +1026,8 @@ local function CreateCharacterView(parentFrame)
     container:RegisterEvent("PLAYER_DAMAGE_DONE_MODS")
     container:RegisterEvent("UNIT_MODEL_CHANGED")
     container:RegisterEvent("UNIT_PORTRAIT_UPDATE")
+    container:RegisterEvent("UPDATE_SHAPESHIFT_FORM")
+    container:RegisterEvent("UPDATE_SHAPESHIFT_FORMS")
     container:RegisterEvent("ITEM_LOCK_CHANGED")
     container:RegisterEvent("CURSOR_CHANGED")
     
@@ -1000,7 +1049,9 @@ local function RegisterPlugin()
         icon = "Interface\\Icons\\INV_Chest_Chain_05",
         CreateView = CreateCharacterView,
         OnShow = function(container)
-            if container and container.Model then
+            if container and container.RefreshPlayerModel then
+                container:RefreshPlayerModel()
+            elseif container and container.Model then
                 container.Model:SetUnit("player")
             end
             if container and container.UpdateEquipment then
