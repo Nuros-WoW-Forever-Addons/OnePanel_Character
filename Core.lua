@@ -219,6 +219,8 @@ local function CreateCharacterView(parentFrame)
     bgOverlay:SetAllPoints(bgContainer)
     pcall(function() bgOverlay:SetAtlas("UI-Character-Info-RaceBG-Overlay", false) end)
     
+    local ApplyNudgeSettings = nil
+    
     local function UpdateRaceBackgroundArt()
         local w = bgContainer:GetWidth()
         local h = bgContainer:GetHeight()
@@ -272,31 +274,7 @@ local function CreateCharacterView(parentFrame)
         return true
     end
     
-    local function ApplyNudgeSettings()
-        if bgContainer then
-            bgContainer:ClearAllPoints()
-            bgContainer:SetPoint("TOPLEFT", leftArea, "TOPLEFT", nudgeState.leftInset, nudgeState.topInset)
-            bgContainer:SetPoint("BOTTOMRIGHT", leftArea, "BOTTOMRIGHT", nudgeState.rightInset, nudgeState.bottomInset)
-        end
-        if bgOverlay then
-            bgOverlay:SetAlpha(nudgeState.overlayAlpha)
-        end
-        UpdateRaceBackgroundArt()
-        if RefreshPlayerModel then
-            RefreshPlayerModel()
-        end
-        if nudgeEditBox then
-            nudgeEditBox:SetText(string.format(
-                "Top: %d | Left: %d | Bottom: %d | Right: %d | Split: %d%% | Alpha: %.2f | BearZ: %.2f | BearScale: %.2f",
-                nudgeState.topInset, nudgeState.leftInset, nudgeState.bottomInset, nudgeState.rightInset,
-                math.floor(nudgeState.splitRatio * 100 + 0.5), nudgeState.overlayAlpha,
-                nudgeState.bearPosZ, nudgeState.bearScale
-            ))
-        end
-    end
-    
     container.UpdateRaceBackgroundArt = UpdateRaceBackgroundArt
-    ApplyNudgeSettings()
     
     ---------------------------------------------------------------------------
     -- Interactive Nudger UI Control Window
@@ -442,41 +420,25 @@ local function CreateCharacterView(parentFrame)
         local basePosZ = -0.08 -- Vertical offset (negative = lower onto ground)
         
         local form = GetShapeshiftForm and GetShapeshiftForm()
-        if form and form > 0 then
-            local formID = GetShapeshiftFormID and GetShapeshiftFormID()
-            local powerType = UnitPowerType and UnitPowerType("player")
-            
-            -- Detect form type
-            if formID == 1 or (Enum and Enum.PowerType and powerType == Enum.PowerType.Rage) then
-                -- Bear form: Large quadruped, lowered so paws sit at exact same foot level as Elf doll
+        local formID = GetShapeshiftFormID and GetShapeshiftFormID()
+        local powerType = UnitPowerType and UnitPowerType("player")
+        
+        local isBear = (form == 1) or (formID == 1) or (formID == 5487) or (powerType == 1) or (powerType == (Enum and Enum.PowerType and Enum.PowerType.Rage))
+        local isCat = (form == 2) or (formID == 5) or (formID == 768) or (powerType == 3) or (powerType == (Enum and Enum.PowerType and Enum.PowerType.Energy))
+        
+        if isBear or (form and form > 0) then
+            if isBear then
                 baseCamScale = nudgeState.bearScale or 1.50
                 basePosY = 0
                 basePosZ = nudgeState.bearPosZ or -0.32
-            elseif formID == 5 or (Enum and Enum.PowerType and powerType == Enum.PowerType.Energy) then
-                -- Cat form: Lower, sleeker quadruped
+            elseif isCat then
                 baseCamScale = 1.30
                 basePosY = 0
                 basePosZ = -0.15
-            elseif formID == 31 then
-                -- Moonkin form: Bulky biped
-                baseCamScale = 1.45
-                basePosY = 0
-                basePosZ = -0.12
-            elseif formID == 3 or formID == 4 or formID == 27 then
-                -- Travel forms (Stag, Aquatic, Flight)
-                baseCamScale = 1.55
-                basePosY = 0
-                basePosZ = -0.18
-            elseif formID == 2 then
-                -- Tree of Life
-                baseCamScale = 1.35
-                basePosY = 0
-                basePosZ = -0.15
             else
-                -- Fallback for other shapeshift forms
-                baseCamScale = 1.35
+                baseCamScale = nudgeState.bearScale or 1.50
                 basePosY = 0
-                basePosZ = -0.15
+                basePosZ = nudgeState.bearPosZ or -0.32
             end
         end
         
@@ -502,7 +464,29 @@ local function CreateCharacterView(parentFrame)
     end
     
     container.RefreshPlayerModel = RefreshPlayerModel
-    RefreshPlayerModel()
+    
+    ApplyNudgeSettings = function()
+        if bgContainer then
+            bgContainer:ClearAllPoints()
+            bgContainer:SetPoint("TOPLEFT", leftArea, "TOPLEFT", nudgeState.leftInset, nudgeState.topInset)
+            bgContainer:SetPoint("BOTTOMRIGHT", leftArea, "BOTTOMRIGHT", nudgeState.rightInset, nudgeState.bottomInset)
+        end
+        if bgOverlay then
+            bgOverlay:SetAlpha(nudgeState.overlayAlpha)
+        end
+        UpdateRaceBackgroundArt()
+        RefreshPlayerModel()
+        if nudgeEditBox then
+            nudgeEditBox:SetText(string.format(
+                "Top: %d | Left: %d | Bottom: %d | Right: %d | Split: %d%% | Alpha: %.2f | BearZ: %.2f | BearScale: %.2f",
+                nudgeState.topInset, nudgeState.leftInset, nudgeState.bottomInset, nudgeState.rightInset,
+                math.floor(nudgeState.splitRatio * 100 + 0.5), nudgeState.overlayAlpha,
+                nudgeState.bearPosZ, nudgeState.bearScale
+            ))
+        end
+    end
+    
+    ApplyNudgeSettings()
     
     -- Safe Rotation Helper
     local function RotateModel(delta)
