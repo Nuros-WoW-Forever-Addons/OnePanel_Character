@@ -192,9 +192,19 @@ local function CreateCharacterView(parentFrame)
     
     -- Dedicated Background Art Container bounded inside leftArea frame insets
     local bgContainer = CreateFrame("Frame", "OnePanel_CharacterBgContainer", leftArea)
-    bgContainer:SetPoint("TOPLEFT", leftArea, "TOPLEFT", 2, -2)
-    bgContainer:SetPoint("BOTTOMRIGHT", leftArea, "BOTTOMRIGHT", -2, 2)
     bgContainer:SetClipsChildren(true)
+    
+    -- Nudger State Controls
+    local nudgeState = {
+        topInset = 0,
+        leftInset = 0,
+        bottomInset = 0,
+        rightInset = 0,
+        splitRatio = 0.72,
+        overlayAlpha = 0.40
+    }
+    
+    local nudgeEditBox = nil
     
     -- Race-Specific Character Background Art (Dynamic 4-Tile Resolution matching CharacterModelScene)
     local bgTL = bgContainer:CreateTexture(nil, "BACKGROUND", nil, -8)
@@ -205,16 +215,16 @@ local function CreateCharacterView(parentFrame)
     local bgOverlay = bgContainer:CreateTexture(nil, "BACKGROUND", nil, -7)
     bgOverlay:SetAllPoints(bgContainer)
     pcall(function() bgOverlay:SetAtlas("UI-Character-Info-RaceBG-Overlay", false) end)
-    bgOverlay:SetAlpha(0.4)
     
     local function UpdateRaceBackgroundArt()
         local w = bgContainer:GetWidth()
         local h = bgContainer:GetHeight()
-        if not w or w == 0 then w = 334 end
-        if not h or h == 0 then h = 427 end
+        if not w or w == 0 then w = 338 end
+        if not h or h == 0 then h = 431 end
         
+        local ratio = nudgeState.splitRatio or (335 / 465)
         local splitW = w * (319 / 399)
-        local splitH = h * (130 / 465) -- Bottom tile height (28% of frame height)
+        local splitH = h * (1.0 - ratio) -- Bottom tile height
         
         bgTL:ClearAllPoints()
         bgTL:SetPoint("TOPLEFT", bgContainer, "TOPLEFT", 0, 0)
@@ -259,8 +269,144 @@ local function CreateCharacterView(parentFrame)
         return true
     end
     
+    local function ApplyNudgeSettings()
+        if bgContainer then
+            bgContainer:ClearAllPoints()
+            bgContainer:SetPoint("TOPLEFT", leftArea, "TOPLEFT", nudgeState.leftInset, nudgeState.topInset)
+            bgContainer:SetPoint("BOTTOMRIGHT", leftArea, "BOTTOMRIGHT", nudgeState.rightInset, nudgeState.bottomInset)
+        end
+        if bgOverlay then
+            bgOverlay:SetAlpha(nudgeState.overlayAlpha)
+        end
+        UpdateRaceBackgroundArt()
+        if nudgeEditBox then
+            nudgeEditBox:SetText(string.format(
+                "Top: %d | Left: %d | Bottom: %d | Right: %d | Split: %d%% | Alpha: %.2f",
+                nudgeState.topInset, nudgeState.leftInset, nudgeState.bottomInset, nudgeState.rightInset,
+                math.floor(nudgeState.splitRatio * 100 + 0.5), nudgeState.overlayAlpha
+            ))
+        end
+    end
+    
     container.UpdateRaceBackgroundArt = UpdateRaceBackgroundArt
-    UpdateRaceBackgroundArt()
+    ApplyNudgeSettings()
+    
+    ---------------------------------------------------------------------------
+    -- Interactive Nudger UI Control Window
+    ---------------------------------------------------------------------------
+    local function CreateNudgerFrame()
+        if _G["OnePanel_BackgroundNudgerFrame"] then return _G["OnePanel_BackgroundNudgerFrame"] end
+        
+        local nudger = CreateFrame("Frame", "OnePanel_BackgroundNudgerFrame", UIParent, "DialogBoxFrame")
+        nudger:SetSize(380, 310)
+        nudger:SetPoint("CENTER", UIParent, "CENTER", 280, 0)
+        nudger:SetFrameStrata("TOOLTIP")
+        nudger:SetMovable(true)
+        nudger:EnableMouse(true)
+        nudger:RegisterForDrag("LeftButton")
+        nudger:SetScript("OnDragStart", nudger.StartMoving)
+        nudger:SetScript("OnDragStop", nudger.StopMovingOrSizing)
+        
+        local title = nudger:CreateFontString(nil, "OVERLAY", "GameFontHighlightLarge")
+        title:SetPoint("TOP", nudger, "TOP", 0, -12)
+        title:SetText("Background Art Nudger")
+        
+        local yOffset = -42
+        local function AddNudgeRow(labelStr, getValueStr, onStep)
+            local lbl = nudger:CreateFontString(nil, "OVERLAY", "GameFontNormal")
+            lbl:SetPoint("TOPLEFT", nudger, "TOPLEFT", 16, yOffset)
+            lbl:SetWidth(100)
+            lbl:SetJustifyH("LEFT")
+            
+            local btnM5 = CreateFrame("Button", nil, nudger, "UIPanelButtonTemplate")
+            btnM5:SetSize(40, 22)
+            btnM5:SetPoint("LEFT", lbl, "RIGHT", 4, 0)
+            btnM5:SetText("-5")
+            
+            local btnM1 = CreateFrame("Button", nil, nudger, "UIPanelButtonTemplate")
+            btnM1:SetSize(36, 22)
+            btnM1:SetPoint("LEFT", btnM5, "RIGHT", 2, 0)
+            btnM1:SetText("-1")
+            
+            local btnP1 = CreateFrame("Button", nil, nudger, "UIPanelButtonTemplate")
+            btnP1:SetSize(36, 22)
+            btnP1:SetPoint("LEFT", btnM1, "RIGHT", 2, 0)
+            btnP1:SetText("+1")
+            
+            local btnP5 = CreateFrame("Button", nil, nudger, "UIPanelButtonTemplate")
+            btnP5:SetSize(40, 22)
+            btnP5:SetPoint("LEFT", btnP1, "RIGHT", 2, 0)
+            btnP5:SetText("+5")
+            
+            local valText = nudger:CreateFontString(nil, "OVERLAY", "GameFontHighlight")
+            valText:SetPoint("LEFT", btnP5, "RIGHT", 8, 0)
+            
+            local function UpdateRow()
+                lbl:SetText(labelStr)
+                valText:SetText(getValueStr())
+            end
+            
+            btnM5:SetScript("OnClick", function() onStep(-5) UpdateRow() ApplyNudgeSettings() end)
+            btnM1:SetScript("OnClick", function() onStep(-1) UpdateRow() ApplyNudgeSettings() end)
+            btnP1:SetScript("OnClick", function() onStep(1) UpdateRow() ApplyNudgeSettings() end)
+            btnP5:SetScript("OnClick", function() onStep(5) UpdateRow() ApplyNudgeSettings() end)
+            
+            UpdateRow()
+            yOffset = yOffset - 30
+        end
+        
+        -- Row 1: Top Inset
+        AddNudgeRow("Top Inset", function() return nudgeState.topInset .. "px" end, function(step)
+            nudgeState.topInset = nudgeState.topInset + step
+        end)
+        
+        -- Row 2: Left Inset
+        AddNudgeRow("Left Inset", function() return nudgeState.leftInset .. "px" end, function(step)
+            nudgeState.leftInset = nudgeState.leftInset + step
+        end)
+        
+        -- Row 3: Bottom Inset
+        AddNudgeRow("Bottom Inset", function() return nudgeState.bottomInset .. "px" end, function(step)
+            nudgeState.bottomInset = nudgeState.bottomInset + step
+        end)
+        
+        -- Row 4: Right Inset
+        AddNudgeRow("Right Inset", function() return nudgeState.rightInset .. "px" end, function(step)
+            nudgeState.rightInset = nudgeState.rightInset + step
+        end)
+        
+        -- Row 5: Split Ratio
+        AddNudgeRow("Split %", function() return math.floor(nudgeState.splitRatio * 100 + 0.5) .. "%" end, function(step)
+            nudgeState.splitRatio = math.max(0.40, math.min(0.90, nudgeState.splitRatio + step * 0.01))
+        end)
+        
+        -- Row 6: Overlay Alpha
+        AddNudgeRow("Alpha", function() return string.format("%.2f", nudgeState.overlayAlpha) end, function(step)
+            nudgeState.overlayAlpha = math.max(0.0, math.min(1.0, nudgeState.overlayAlpha + step * 0.05))
+        end)
+        
+        -- Output Copy Box
+        nudgeEditBox = CreateFrame("EditBox", "OnePanel_NudgeEditBox", nudger, "InputBoxTemplate")
+        nudgeEditBox:SetSize(340, 24)
+        nudgeEditBox:SetPoint("BOTTOM", nudger, "BOTTOM", 0, 16)
+        nudgeEditBox:SetAutoFocus(false)
+        
+        ApplyNudgeSettings()
+        return nudger
+    end
+    
+    local nudgerFrame = CreateNudgerFrame()
+    nudgerFrame:Show()
+    
+    SLASH_OPNUDGE1 = "/opnudge"
+    SLASH_OPNUDGE2 = "/opbg"
+    SlashCmdList["OPNUDGE"] = function()
+        if nudgerFrame:IsShown() then
+            nudgerFrame:Hide()
+        else
+            nudgerFrame:Show()
+        end
+    end
     
     -- Central 3D Player Portrait Model (Matches CharacterModelScene at Frame Level 50)
     local model = CreateFrame("PlayerModel", "OnePanel_Character3DPlayerModel", bgContainer)
