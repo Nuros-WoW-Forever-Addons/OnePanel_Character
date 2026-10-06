@@ -276,6 +276,89 @@ local function CreateCharacterView(parentFrame)
     
     container.UpdateRaceBackgroundArt = UpdateRaceBackgroundArt
     
+    -- Central 3D Player Portrait Model (Matches CharacterModelScene at Frame Level 50)
+    local model = CreateFrame("PlayerModel", "OnePanel_Character3DPlayerModel", leftArea)
+    model:SetPoint("TOPLEFT", leftArea, "TOPLEFT", 0, 0)
+    model:SetPoint("BOTTOMRIGHT", leftArea, "BOTTOMRIGHT", 0, 0)
+    model:SetFrameLevel(50)
+    container.Model = model
+    
+    -- Form-aware Model Refresh & Camera/Scale Setup
+    local function RefreshPlayerModel()
+        if not model then return end
+        pcall(function() model:SetUnit("player") end)
+        
+        local baseCamScale = 1.0
+        local basePosY = 0     -- Horizontal offset (0 = centered)
+        local basePosZ = -0.08 -- Vertical offset (negative = lower onto ground)
+        
+        local form = GetShapeshiftForm and GetShapeshiftForm()
+        local formID = GetShapeshiftFormID and GetShapeshiftFormID()
+        local powerType = UnitPowerType and UnitPowerType("player")
+        
+        local isBear = (form == 1) or (formID == 1) or (formID == 5487) or (powerType == 1) or (powerType == (Enum and Enum.PowerType and Enum.PowerType.Rage))
+        local isCat = (form == 2) or (formID == 5) or (formID == 768) or (powerType == 3) or (powerType == (Enum and Enum.PowerType and Enum.PowerType.Energy))
+        
+        if isBear or (form and form > 0) then
+            if isBear then
+                baseCamScale = nudgeState.bearScale or 1.50
+                basePosY = 0
+                basePosZ = nudgeState.bearPosZ or -0.32
+            elseif isCat then
+                baseCamScale = 1.30
+                basePosY = 0
+                basePosZ = -0.15
+            else
+                baseCamScale = nudgeState.bearScale or 1.50
+                basePosY = 0
+                basePosZ = nudgeState.bearPosZ or -0.32
+            end
+        end
+        
+        model.baseCamScale = baseCamScale
+        model.camScale = baseCamScale
+        model.targetCamScale = baseCamScale
+        model.facing = 0
+        
+        if model.SetFacing then
+            pcall(function() model:SetFacing(0) end)
+        elseif model.SetRotation then
+            pcall(function() model:SetRotation(0) end)
+        end
+        if model.SetCamDistanceScale then
+            pcall(function() model:SetCamDistanceScale(baseCamScale) end)
+        end
+        if model.SetPosition then
+            pcall(function() model:SetPosition(0, basePosY, basePosZ) end)
+        end
+        if model.SetPortraitZoom then
+            pcall(function() model:SetPortraitZoom(0) end)
+        end
+    end
+    
+    container.RefreshPlayerModel = RefreshPlayerModel
+    
+    local function ApplyNudgeSettings()
+        if bgContainer then
+            bgContainer:ClearAllPoints()
+            bgContainer:SetPoint("TOPLEFT", leftArea, "TOPLEFT", nudgeState.leftInset, nudgeState.topInset)
+            bgContainer:SetPoint("BOTTOMRIGHT", leftArea, "BOTTOMRIGHT", nudgeState.rightInset, nudgeState.bottomInset)
+        end
+        if bgOverlay then
+            bgOverlay:SetAlpha(nudgeState.overlayAlpha)
+        end
+        UpdateRaceBackgroundArt()
+        RefreshPlayerModel()
+        if nudgeEditBox then
+            nudgeEditBox:SetText(string.format(
+                "Top: %d | Left: %d | Bottom: %d | Right: %d | Split: %d%% | Alpha: %.2f | BearZ: %.2f | BearScale: %.2f",
+                nudgeState.topInset, nudgeState.leftInset, nudgeState.bottomInset, nudgeState.rightInset,
+                math.floor(nudgeState.splitRatio * 100 + 0.5), nudgeState.overlayAlpha,
+                nudgeState.bearPosZ, nudgeState.bearScale
+            ))
+        end
+    end
+    
     ---------------------------------------------------------------------------
     -- Interactive Nudger UI Control Window
     ---------------------------------------------------------------------------
@@ -402,91 +485,6 @@ local function CreateCharacterView(parentFrame)
             nudgerFrame:Show()
         end
     end
-    
-    -- Central 3D Player Portrait Model (Matches CharacterModelScene at Frame Level 50)
-    local model = CreateFrame("PlayerModel", "OnePanel_Character3DPlayerModel", leftArea)
-    model:SetPoint("TOPLEFT", leftArea, "TOPLEFT", 0, 0)
-    model:SetPoint("BOTTOMRIGHT", leftArea, "BOTTOMRIGHT", 0, 0)
-    model:SetFrameLevel(50)
-    container.Model = model
-    
-    -- Form-aware Model Refresh & Camera/Scale Setup
-    local function RefreshPlayerModel()
-        if not model then return end
-        pcall(function() model:SetUnit("player") end)
-        
-        local baseCamScale = 1.0
-        local basePosY = 0     -- Horizontal offset (0 = centered)
-        local basePosZ = -0.08 -- Vertical offset (negative = lower onto ground)
-        
-        local form = GetShapeshiftForm and GetShapeshiftForm()
-        local formID = GetShapeshiftFormID and GetShapeshiftFormID()
-        local powerType = UnitPowerType and UnitPowerType("player")
-        
-        local isBear = (form == 1) or (formID == 1) or (formID == 5487) or (powerType == 1) or (powerType == (Enum and Enum.PowerType and Enum.PowerType.Rage))
-        local isCat = (form == 2) or (formID == 5) or (formID == 768) or (powerType == 3) or (powerType == (Enum and Enum.PowerType and Enum.PowerType.Energy))
-        
-        if isBear or (form and form > 0) then
-            if isBear then
-                baseCamScale = nudgeState.bearScale or 1.50
-                basePosY = 0
-                basePosZ = nudgeState.bearPosZ or -0.32
-            elseif isCat then
-                baseCamScale = 1.30
-                basePosY = 0
-                basePosZ = -0.15
-            else
-                baseCamScale = nudgeState.bearScale or 1.50
-                basePosY = 0
-                basePosZ = nudgeState.bearPosZ or -0.32
-            end
-        end
-        
-        model.baseCamScale = baseCamScale
-        model.camScale = baseCamScale
-        model.targetCamScale = baseCamScale
-        model.facing = 0
-        
-        if model.SetFacing then
-            pcall(function() model:SetFacing(0) end)
-        elseif model.SetRotation then
-            pcall(function() model:SetRotation(0) end)
-        end
-        if model.SetCamDistanceScale then
-            pcall(function() model:SetCamDistanceScale(baseCamScale) end)
-        end
-        if model.SetPosition then
-            pcall(function() model:SetPosition(0, basePosY, basePosZ) end)
-        end
-        if model.SetPortraitZoom then
-            pcall(function() model:SetPortraitZoom(0) end)
-        end
-    end
-    
-    container.RefreshPlayerModel = RefreshPlayerModel
-    
-    ApplyNudgeSettings = function()
-        if bgContainer then
-            bgContainer:ClearAllPoints()
-            bgContainer:SetPoint("TOPLEFT", leftArea, "TOPLEFT", nudgeState.leftInset, nudgeState.topInset)
-            bgContainer:SetPoint("BOTTOMRIGHT", leftArea, "BOTTOMRIGHT", nudgeState.rightInset, nudgeState.bottomInset)
-        end
-        if bgOverlay then
-            bgOverlay:SetAlpha(nudgeState.overlayAlpha)
-        end
-        UpdateRaceBackgroundArt()
-        RefreshPlayerModel()
-        if nudgeEditBox then
-            nudgeEditBox:SetText(string.format(
-                "Top: %d | Left: %d | Bottom: %d | Right: %d | Split: %d%% | Alpha: %.2f | BearZ: %.2f | BearScale: %.2f",
-                nudgeState.topInset, nudgeState.leftInset, nudgeState.bottomInset, nudgeState.rightInset,
-                math.floor(nudgeState.splitRatio * 100 + 0.5), nudgeState.overlayAlpha,
-                nudgeState.bearPosZ, nudgeState.bearScale
-            ))
-        end
-    end
-    
-    ApplyNudgeSettings()
     
     -- Safe Rotation Helper
     local function RotateModel(delta)
