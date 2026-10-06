@@ -193,20 +193,9 @@ local function CreateCharacterView(parentFrame)
     -- Dedicated Background Art Container bounded inside leftArea frame insets
     local bgContainer = CreateFrame("Frame", "OnePanel_CharacterBgContainer", leftArea)
     bgContainer:SetClipsChildren(true)
+    bgContainer:SetPoint("TOPLEFT", leftArea, "TOPLEFT", 5, -5)
+    bgContainer:SetPoint("BOTTOMRIGHT", leftArea, "BOTTOMRIGHT", 3, -13)
     
-    -- Nudger State Controls (Defaulted to verified pixel-perfect frame boundaries)
-    local nudgeState = {
-        topInset = -5,
-        leftInset = 5,
-        bottomInset = -13,
-        rightInset = 3,
-        splitRatio = 0.90,
-        overlayAlpha = 0.40,
-        bearScale = 1.50,
-        bearPosZ = -0.24
-    }
-    
-    local nudgeEditBox = nil
     local RefreshPlayerModel = nil
     
     -- Race-Specific Character Background Art (Dynamic 4-Tile Resolution matching CharacterModelScene)
@@ -217,9 +206,8 @@ local function CreateCharacterView(parentFrame)
     
     local bgOverlay = bgContainer:CreateTexture(nil, "BACKGROUND", nil, -7)
     bgOverlay:SetAllPoints(bgContainer)
+    bgOverlay:SetAlpha(0.40)
     pcall(function() bgOverlay:SetAtlas("UI-Character-Info-RaceBG-Overlay", false) end)
-    
-    local ApplyNudgeSettings = nil
     
     local function UpdateRaceBackgroundArt()
         local w = bgContainer:GetWidth()
@@ -227,7 +215,7 @@ local function CreateCharacterView(parentFrame)
         if not w or w == 0 then w = 338 end
         if not h or h == 0 then h = 431 end
         
-        local ratio = nudgeState.splitRatio or (335 / 465)
+        local ratio = 0.90
         local splitW = w * (319 / 399)
         local splitH = h * (1.0 - ratio) -- Bottom tile height
         
@@ -301,17 +289,17 @@ local function CreateCharacterView(parentFrame)
         
         if isBear or (form and form > 0) then
             if isBear then
-                baseCamScale = nudgeState.bearScale or 1.50
+                baseCamScale = 1.50
                 basePosY = 0
-                basePosZ = nudgeState.bearPosZ or -0.24
+                basePosZ = -0.24
             elseif isCat then
                 baseCamScale = 1.30
                 basePosY = 0
                 basePosZ = -0.15
             else
-                baseCamScale = nudgeState.bearScale or 1.50
+                baseCamScale = 1.50
                 basePosY = 0
-                basePosZ = nudgeState.bearPosZ or -0.32
+                basePosZ = -0.24
             end
         end
         
@@ -337,154 +325,6 @@ local function CreateCharacterView(parentFrame)
     end
     
     container.RefreshPlayerModel = RefreshPlayerModel
-    
-    local function ApplyNudgeSettings()
-        if bgContainer then
-            bgContainer:ClearAllPoints()
-            bgContainer:SetPoint("TOPLEFT", leftArea, "TOPLEFT", nudgeState.leftInset, nudgeState.topInset)
-            bgContainer:SetPoint("BOTTOMRIGHT", leftArea, "BOTTOMRIGHT", nudgeState.rightInset, nudgeState.bottomInset)
-        end
-        if bgOverlay then
-            bgOverlay:SetAlpha(nudgeState.overlayAlpha)
-        end
-        UpdateRaceBackgroundArt()
-        RefreshPlayerModel()
-        if nudgeEditBox then
-            nudgeEditBox:SetText(string.format(
-                "Top: %d | Left: %d | Bottom: %d | Right: %d | Split: %d%% | Alpha: %.2f | BearZ: %.2f | BearScale: %.2f",
-                nudgeState.topInset, nudgeState.leftInset, nudgeState.bottomInset, nudgeState.rightInset,
-                math.floor(nudgeState.splitRatio * 100 + 0.5), nudgeState.overlayAlpha,
-                nudgeState.bearPosZ, nudgeState.bearScale
-            ))
-        end
-    end
-    
-    ---------------------------------------------------------------------------
-    -- Interactive Nudger UI Control Window
-    ---------------------------------------------------------------------------
-    local function CreateNudgerFrame()
-        if _G["OnePanel_BackgroundNudgerFrame"] then return _G["OnePanel_BackgroundNudgerFrame"] end
-        
-        local nudger = CreateFrame("Frame", "OnePanel_BackgroundNudgerFrame", UIParent, "DialogBoxFrame")
-        nudger:SetSize(380, 360)
-        nudger:SetPoint("CENTER", UIParent, "CENTER", 280, 0)
-        nudger:SetFrameStrata("TOOLTIP")
-        nudger:SetMovable(true)
-        nudger:EnableMouse(true)
-        nudger:RegisterForDrag("LeftButton")
-        nudger:SetScript("OnDragStart", nudger.StartMoving)
-        nudger:SetScript("OnDragStop", nudger.StopMovingOrSizing)
-        
-        local title = nudger:CreateFontString(nil, "OVERLAY", "GameFontHighlightLarge")
-        title:SetPoint("TOP", nudger, "TOP", 0, -12)
-        title:SetText("Background Art & Doll Nudger")
-        
-        local yOffset = -38
-        local function AddNudgeRow(labelStr, getValueStr, onStep)
-            local lbl = nudger:CreateFontString(nil, "OVERLAY", "GameFontNormal")
-            lbl:SetPoint("TOPLEFT", nudger, "TOPLEFT", 16, yOffset)
-            lbl:SetWidth(100)
-            lbl:SetJustifyH("LEFT")
-            
-            local btnM5 = CreateFrame("Button", nil, nudger, "UIPanelButtonTemplate")
-            btnM5:SetSize(40, 20)
-            btnM5:SetPoint("LEFT", lbl, "RIGHT", 4, 0)
-            btnM5:SetText("-5")
-            
-            local btnM1 = CreateFrame("Button", nil, nudger, "UIPanelButtonTemplate")
-            btnM1:SetSize(36, 20)
-            btnM1:SetPoint("LEFT", btnM5, "RIGHT", 2, 0)
-            btnM1:SetText("-1")
-            
-            local btnP1 = CreateFrame("Button", nil, nudger, "UIPanelButtonTemplate")
-            btnP1:SetSize(36, 20)
-            btnP1:SetPoint("LEFT", btnM1, "RIGHT", 2, 0)
-            btnP1:SetText("+1")
-            
-            local btnP5 = CreateFrame("Button", nil, nudger, "UIPanelButtonTemplate")
-            btnP5:SetSize(40, 20)
-            btnP5:SetPoint("LEFT", btnP1, "RIGHT", 2, 0)
-            btnP5:SetText("+5")
-            
-            local valText = nudger:CreateFontString(nil, "OVERLAY", "GameFontHighlight")
-            valText:SetPoint("LEFT", btnP5, "RIGHT", 8, 0)
-            
-            local function UpdateRow()
-                lbl:SetText(labelStr)
-                valText:SetText(getValueStr())
-            end
-            
-            btnM5:SetScript("OnClick", function() onStep(-5) UpdateRow() ApplyNudgeSettings() end)
-            btnM1:SetScript("OnClick", function() onStep(-1) UpdateRow() ApplyNudgeSettings() end)
-            btnP1:SetScript("OnClick", function() onStep(1) UpdateRow() ApplyNudgeSettings() end)
-            btnP5:SetScript("OnClick", function() onStep(5) UpdateRow() ApplyNudgeSettings() end)
-            
-            UpdateRow()
-            yOffset = yOffset - 26
-        end
-        
-        -- Row 1: Top Inset
-        AddNudgeRow("Top Inset", function() return nudgeState.topInset .. "px" end, function(step)
-            nudgeState.topInset = nudgeState.topInset + step
-        end)
-        
-        -- Row 2: Left Inset
-        AddNudgeRow("Left Inset", function() return nudgeState.leftInset .. "px" end, function(step)
-            nudgeState.leftInset = nudgeState.leftInset + step
-        end)
-        
-        -- Row 3: Bottom Inset
-        AddNudgeRow("Bottom Inset", function() return nudgeState.bottomInset .. "px" end, function(step)
-            nudgeState.bottomInset = nudgeState.bottomInset + step
-        end)
-        
-        -- Row 4: Right Inset
-        AddNudgeRow("Right Inset", function() return nudgeState.rightInset .. "px" end, function(step)
-            nudgeState.rightInset = nudgeState.rightInset + step
-        end)
-        
-        -- Row 5: Split Ratio
-        AddNudgeRow("Split %", function() return math.floor(nudgeState.splitRatio * 100 + 0.5) .. "%" end, function(step)
-            nudgeState.splitRatio = math.max(0.40, math.min(0.90, nudgeState.splitRatio + step * 0.01))
-        end)
-        
-        -- Row 6: Overlay Alpha
-        AddNudgeRow("Alpha", function() return string.format("%.2f", nudgeState.overlayAlpha) end, function(step)
-            nudgeState.overlayAlpha = math.max(0.0, math.min(1.0, nudgeState.overlayAlpha + step * 0.05))
-        end)
-        
-        -- Row 7: Bear Height (Z)
-        AddNudgeRow("Bear Height Z", function() return string.format("%.2f", nudgeState.bearPosZ) end, function(step)
-            nudgeState.bearPosZ = nudgeState.bearPosZ + (step * 0.02)
-        end)
-        
-        -- Row 8: Bear Scale
-        AddNudgeRow("Bear Scale", function() return string.format("%.2f", nudgeState.bearScale) end, function(step)
-            nudgeState.bearScale = math.max(0.5, math.min(3.0, nudgeState.bearScale + (step * 0.02)))
-        end)
-        
-        -- Output Copy Box
-        nudgeEditBox = CreateFrame("EditBox", "OnePanel_NudgeEditBox", nudger, "InputBoxTemplate")
-        nudgeEditBox:SetSize(340, 24)
-        nudgeEditBox:SetPoint("BOTTOM", nudger, "BOTTOM", 0, 16)
-        nudgeEditBox:SetAutoFocus(false)
-        
-        ApplyNudgeSettings()
-        return nudger
-    end
-    
-    local nudgerFrame = CreateNudgerFrame()
-    nudgerFrame:Show()
-    
-    SLASH_OPNUDGE1 = "/opnudge"
-    SLASH_OPNUDGE2 = "/opbg"
-    SlashCmdList["OPNUDGE"] = function()
-        if nudgerFrame:IsShown() then
-            nudgerFrame:Hide()
-        else
-            nudgerFrame:Show()
-        end
-    end
     
     -- Safe Rotation Helper
     local function RotateModel(delta)
