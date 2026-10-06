@@ -232,12 +232,12 @@ local function CreateCharacterView(parentFrame)
     -- Safe Zoom Helper
     local function ZoomModel(delta)
         if not model then return end
-        model.camScale = math.max(0.3, math.min(2.5, (model.camScale or 1.0) + delta))
+        model.camScale = math.max(0.35, math.min(2.5, (model.camScale or 1.0) + delta))
         if model.SetCamDistanceScale then
             pcall(function() model:SetCamDistanceScale(model.camScale) end)
         end
         if model.SetPortraitZoom then
-            local pZoom = math.max(0, math.min(1, 1.0 - (model.camScale * 0.5)))
+            local pZoom = math.max(0, math.min(1, (1.0 - model.camScale) / 0.65))
             pcall(function() model:SetPortraitZoom(pZoom) end)
         end
     end
@@ -294,31 +294,61 @@ local function CreateCharacterView(parentFrame)
     ---------------------------------------------------------------------------
     
     local toolbar = CreateFrame("Frame", "OnePanel_3DModelToolbar", leftArea)
-    toolbar:SetSize(130, 24)
+    toolbar:SetSize(176, 32)
     toolbar:SetPoint("TOP", leftArea, "TOP", 0, -20)
     toolbar:SetFrameLevel(120)
+    toolbar:SetAlpha(0)
     
-    local function CreateBlizzardModelButton(name, atlasUp, atlasDown, fallbackUp, fallbackDown, tooltipText, onClickAction, onHoldAction)
+    -- Mouseover Auto-Fade for Toolbar
+    leftArea:HookScript("OnUpdate", function(self, elapsed)
+        if leftArea:IsMouseOver() or toolbar:IsMouseOver() then
+            if toolbar:GetAlpha() < 1 then
+                toolbar:SetAlpha(math.min(1, toolbar:GetAlpha() + elapsed * 6))
+            end
+        else
+            if toolbar:GetAlpha() > 0 then
+                toolbar:SetAlpha(math.max(0, toolbar:GetAlpha() - elapsed * 4))
+            end
+        end
+    end)
+    
+    local function CreateBlizzardModelButton(name, iconAtlas, iconFallback, tooltipText, onClickAction, onHoldAction)
         local btn = CreateFrame("Button", name, toolbar)
-        btn:SetSize(22, 22)
+        btn:SetSize(32, 32)
         
-        local normTex = btn:CreateTexture(nil, "ARTWORK")
-        local setUp = pcall(function() normTex:SetAtlas(atlasUp, true) end)
-        if not setUp or not normTex:GetTexture() then
-            normTex:SetTexture(fallbackUp)
+        -- Normal Background (common-button-square-gray-up)
+        local normBg = btn:CreateTexture(nil, "BACKGROUND")
+        local setUp = pcall(function() normBg:SetAtlas("common-button-square-gray-up", true) end)
+        if not setUp or not normBg:GetTexture() then
+            normBg:SetTexture("Interface\\Buttons\\UI-SquareButton-Up")
         end
-        normTex:SetAllPoints(btn)
-        btn:SetNormalTexture(normTex)
+        normBg:SetAllPoints(btn)
+        btn:SetNormalTexture(normBg)
         
-        local pushTex = btn:CreateTexture(nil, "ARTWORK")
-        local setDown = pcall(function() pushTex:SetAtlas(atlasDown, true) end)
-        if not setDown or not pushTex:GetTexture() then
-            pushTex:SetTexture(fallbackDown)
+        -- Pushed Background (common-button-square-gray-down)
+        local pushBg = btn:CreateTexture(nil, "BACKGROUND")
+        local setDown = pcall(function() pushBg:SetAtlas("common-button-square-gray-down", true) end)
+        if not setDown or not pushBg:GetTexture() then
+            pushBg:SetTexture("Interface\\Buttons\\UI-SquareButton-Down")
         end
-        pushTex:SetAllPoints(btn)
-        btn:SetPushedTexture(pushTex)
+        pushBg:SetAllPoints(btn)
+        btn:SetPushedTexture(pushBg)
         
-        btn:SetHighlightTexture("Interface\\Buttons\\UI-Common-MouseHilight", "ADD")
+        -- Icon (ARTWORK overlay)
+        local icon = btn:CreateTexture(nil, "ARTWORK")
+        local setIcon = pcall(function() icon:SetAtlas(iconAtlas, true) end)
+        if not setIcon or not icon:GetTexture() then
+            icon:SetTexture(iconFallback)
+        end
+        icon:SetSize(20, 20)
+        icon:SetPoint("CENTER", btn, "CENTER", 0, 0)
+        btn.Icon = icon
+        
+        -- Highlight
+        local hl = btn:CreateTexture(nil, "HIGHLIGHT")
+        hl:SetTexture("Interface\\Buttons\\UI-Common-MouseHilight")
+        hl:SetBlendMode("ADD")
+        hl:SetAllPoints(btn)
         
         btn:SetScript("OnMouseDown", function(self, button)
             if button == "LeftButton" then self.isHolding = true end
@@ -343,40 +373,35 @@ local function CreateCharacterView(parentFrame)
     end
     
     local btnZoomIn = CreateBlizzardModelButton("OnePanel_BtnZoomIn", 
-        "UI-HUD-ModelScene-ZoomIn-Up", "UI-HUD-ModelScene-ZoomIn-Down",
-        "Interface\\Buttons\\UI-PlusButton-Up", "Interface\\Buttons\\UI-PlusButton-Down",
+        "common-icon-zoomin", "Interface\\Buttons\\UI-PlusButton-Up",
         "Zoom In", 
         function() ZoomModel(-0.08) end,
-        function(elapsed) ZoomModel(-0.5 * elapsed) end)
+        function(elapsed) ZoomModel(-0.6 * elapsed) end)
     btnZoomIn:SetPoint("LEFT", toolbar, "LEFT", 0, 0)
     
     local btnZoomOut = CreateBlizzardModelButton("OnePanel_BtnZoomOut", 
-        "UI-HUD-ModelScene-ZoomOut-Up", "UI-HUD-ModelScene-ZoomOut-Down",
-        "Interface\\Buttons\\UI-MinusButton-Up", "Interface\\Buttons\\UI-MinusButton-Down",
+        "common-icon-zoomout", "Interface\\Buttons\\UI-MinusButton-Up",
         "Zoom Out", 
         function() ZoomModel(0.08) end,
-        function(elapsed) ZoomModel(0.5 * elapsed) end)
+        function(elapsed) ZoomModel(0.6 * elapsed) end)
     btnZoomOut:SetPoint("LEFT", btnZoomIn, "RIGHT", 4, 0)
     
     local btnRotLeft = CreateBlizzardModelButton("OnePanel_BtnRotLeft", 
-        "UI-HUD-ModelScene-RotateLeft-Up", "UI-HUD-ModelScene-RotateLeft-Down",
-        "Interface\\Buttons\\UI-RotationLeft-Button-Up", "Interface\\Buttons\\UI-RotationLeft-Button-Down",
+        "common-icon-rotateleft", "Interface\\Buttons\\UI-RotationLeft-Button-Up",
         "Rotate Left", 
         function() RotateModel(-0.15) end,
         function(elapsed) RotateModel(-1.8 * elapsed) end)
     btnRotLeft:SetPoint("LEFT", btnZoomOut, "RIGHT", 4, 0)
     
     local btnRotRight = CreateBlizzardModelButton("OnePanel_BtnRotRight", 
-        "UI-HUD-ModelScene-RotateRight-Up", "UI-HUD-ModelScene-RotateRight-Down",
-        "Interface\\Buttons\\UI-RotationRight-Button-Up", "Interface\\Buttons\\UI-RotationRight-Button-Down",
+        "common-icon-rotateright", "Interface\\Buttons\\UI-RotationRight-Button-Up",
         "Rotate Right", 
         function() RotateModel(0.15) end,
         function(elapsed) RotateModel(1.8 * elapsed) end)
     btnRotRight:SetPoint("LEFT", btnRotLeft, "RIGHT", 4, 0)
     
     local btnReset = CreateBlizzardModelButton("OnePanel_BtnReset", 
-        "UI-HUD-ModelScene-Reset-Up", "UI-HUD-ModelScene-Reset-Down",
-        "Interface\\Buttons\\UI-RefreshButton", "Interface\\Buttons\\UI-RefreshButton",
+        "common-icon-undo", "Interface\\Buttons\\UI-RefreshButton",
         "Reset Model & Camera", 
         function() ResetModel() end,
         nil)
