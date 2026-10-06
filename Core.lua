@@ -541,7 +541,7 @@ local function CreateCharacterView(parentFrame)
     local subPanel = CreateFrame("Frame", "OnePanel_CharacterSubPanel", container)
     subPanel:SetPoint("TOPRIGHT", container, "TOPRIGHT", -10, -12)
     subPanel:SetPoint("BOTTOMRIGHT", container, "BOTTOMRIGHT", -10, 12)
-    subPanel:SetWidth(233)
+    subPanel:SetWidth(208)
     
     if Utils and Utils.FrameHelper then
         Utils.FrameHelper:ApplyBackdrop(subPanel,
@@ -567,9 +567,9 @@ local function CreateCharacterView(parentFrame)
         end)
     end
     
-    -- Sub-Tab Bar Header (Matches PaperDollSidebarTabs: 233x85, TOP 0,-4)
+    -- Sub-Tab Bar Header
     local subTabBar = CreateFrame("Frame", "OnePanel_PaperDollSidebarTabs", subPanel)
-    subTabBar:SetSize(233, 85)
+    subTabBar:SetSize(208, 48)
     subTabBar:SetPoint("TOP", subPanel, "TOP", 0, -4)
     
     local subTabs = {
@@ -582,10 +582,17 @@ local function CreateCharacterView(parentFrame)
     subPanel.tabButtons = {}
     subPanel.views = {}
     
-    -- Sub-View Content Container
+    -- Level & Class Title Header (Centered under sub-tabs with equal 4px padding)
+    local levelClassText = subPanel:CreateFontString(nil, "OVERLAY", "GameFontNormal")
+    levelClassText:SetPoint("TOP", subTabBar, "TOP", 0, -46)
+    local lvl = UnitLevel("player") or 1
+    local cls = UnitClass("player") or ""
+    levelClassText:SetText(string.format("|cffffffffLevel %d|r |cffffcc00%s|r", lvl, cls))
+    
+    -- Sub-View Content Container (Starts 4px below Level header)
     local subContentView = CreateFrame("Frame", "OnePanel_CharacterSubContentView", subPanel)
-    subContentView:SetPoint("TOPLEFT", subTabBar, "BOTTOMLEFT", 0, -12)
-    subContentView:SetPoint("BOTTOMRIGHT", subPanel, "BOTTOMRIGHT", -6, 6)
+    subContentView:SetPoint("TOPLEFT", subPanel, "TOPLEFT", 4, -68)
+    subContentView:SetPoint("BOTTOMRIGHT", subPanel, "BOTTOMRIGHT", -4, 6)
     subPanel.ContentView = subContentView
     
     ---------------------------------------------------------------------------
@@ -628,7 +635,7 @@ local function CreateCharacterView(parentFrame)
     end
     
     local statsContent = CreateFrame("Frame", "OnePanel_StatsContent", statsView)
-    statsContent:SetSize(193, 600)
+    statsContent:SetSize(184, 600)
     statsView:SetScrollChild(statsContent)
     subPanel.views["stats"] = statsView
     
@@ -650,7 +657,7 @@ local function CreateCharacterView(parentFrame)
                     headerBtn:Disable()
                 end
                 headerBtn:ClearAllPoints()
-                headerBtn:SetSize(187, 22)
+                headerBtn:SetSize(178, 22)
                 headerBtn:SetPoint("TOPLEFT", statsContent, "TOPLEFT", 3, yOffset)
                 headerBtn:SetText(entry.header)
                 headerBtn:Show()
@@ -677,7 +684,7 @@ local function CreateCharacterView(parentFrame)
                 end
                 
                 rowFrame:ClearAllPoints()
-                rowFrame:SetSize(187, 20)
+                rowFrame:SetSize(178, 20)
                 rowFrame:SetPoint("TOPLEFT", statsContent, "TOPLEFT", 3, yOffset)
                 
                 if dataRowCounter % 2 == 1 then
@@ -750,13 +757,13 @@ local function CreateCharacterView(parentFrame)
     end
     
     -- Sub-Tab Bar Icons (Matches PaperDollSidebarTab: CheckButton 42x42 with UI-Character-Info-StatTab atlases)
-    local startX = math.floor((233 - (42 * 3)) / 2) -- 53px centered
+    local startX = math.floor((208 - (42 * 3)) / 2) -- 41px centered
     
     for i, tabInfo in ipairs(subTabs) do
         local tabId = tabInfo.id
         local btn = CreateFrame("CheckButton", "OnePanel_CharSubTab_" .. tabId, subTabBar)
         btn:SetSize(42, 42)
-        btn:SetPoint("TOPLEFT", subTabBar, "TOPLEFT", startX + (i - 1) * 42, -4)
+        btn:SetPoint("TOPLEFT", subTabBar, "TOPLEFT", startX + (i - 1) * 42, 0)
         
         -- Background Icon (Layer: BACKGROUND)
         local icon = btn:CreateTexture(nil, "BACKGROUND")
@@ -811,13 +818,6 @@ local function CreateCharacterView(parentFrame)
         
         subPanel.tabButtons[tabId] = btn
     end
-    
-    -- Level & Class Title Header (Centered under sub-tabs)
-    local levelClassText = subPanel:CreateFontString(nil, "OVERLAY", "GameFontNormalLarge")
-    levelClassText:SetPoint("TOP", subTabBar, "BOTTOM", 0, -4)
-    local lvl = UnitLevel("player") or 1
-    local cls = UnitClass("player") or ""
-    levelClassText:SetText(string.format("|cffffffffLevel %d|r |cffffcc00%s|r", lvl, cls))
     
     SwitchSubTab("stats")
     
