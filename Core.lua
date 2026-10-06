@@ -431,6 +431,9 @@ local function CreateCharacterView(parentFrame)
         btn:SetFrameLevel(101)
         btn.slotId = slotInfo.id
         
+        btn:RegisterForClicks("LeftButtonUp", "RightButtonUp")
+        btn:RegisterForDrag("LeftButton")
+        
         local bg = btn:CreateTexture(nil, "BACKGROUND")
         bg:SetTexture("Interface\\Buttons\\UI-Quickslot2")
         bg:SetSize(58, 58)
@@ -443,10 +446,57 @@ local function CreateCharacterView(parentFrame)
         icon:SetTexture(slotInfo.icon)
         btn.Icon = icon
         
+        local border = btn:CreateTexture(nil, "OVERLAY")
+        border:SetSize(37, 37)
+        border:SetPoint("CENTER", btn, "CENTER", 0, 0)
+        border:SetTexture("Interface\\Buttons\\UI-ActionButton-Border")
+        border:SetBlendMode("ADD")
+        border:Hide()
+        btn.Border = border
+        
         local hl = btn:CreateTexture(nil, "HIGHLIGHT")
         hl:SetTexture("Interface\\Buttons\\ButtonHilight-Square")
         hl:SetBlendMode("ADD")
         hl:SetAllPoints(icon)
+        
+        btn:SetScript("OnClick", function(self, button)
+            if InCombatLockdown and InCombatLockdown() then
+                if UIErrorsFrame then
+                    UIErrorsFrame:AddMessage("Cannot swap equipment in combat!", 1, 0.1, 0.1)
+                end
+                return
+            end
+            
+            if button == "LeftButton" then
+                PickupInventoryItem(self.slotId)
+            elseif button == "RightButton" then
+                if GetInventoryItemTexture("player", self.slotId) then
+                    PickupInventoryItem(self.slotId)
+                    if CursorHasItem() then
+                        local autoEquip = _G.AutoEquipCursorItem or _G.PutItemInBackpack
+                        if type(autoEquip) == "function" then
+                            autoEquip()
+                        else
+                            pcall(PickupContainerItem, 0, 0)
+                        end
+                    end
+                end
+            end
+            
+            if container and container.UpdateEquipment then
+                container:UpdateEquipment()
+            end
+        end)
+        
+        btn:SetScript("OnDragStart", function(self)
+            if InCombatLockdown and InCombatLockdown() then return end
+            PickupInventoryItem(self.slotId)
+        end)
+        
+        btn:SetScript("OnReceiveDrag", function(self)
+            if InCombatLockdown and InCombatLockdown() then return end
+            PickupInventoryItem(self.slotId)
+        end)
         
         btn:SetScript("OnEnter", function(self)
             GameTooltip:SetOwner(self, "ANCHOR_RIGHT")
@@ -831,10 +881,31 @@ local function CreateCharacterView(parentFrame)
     local function UpdateEquipment()
         for slotId, btn in pairs(container.slots) do
             local texture = GetInventoryItemTexture("player", slotId)
+            local isLocked = IsInventoryItemLocked and IsInventoryItemLocked(slotId)
+            
             if texture then
                 btn.Icon:SetTexture(texture)
-                btn.Icon:SetVertexColor(1, 1, 1, 1)
+                if isLocked then
+                    btn.Icon:SetVertexColor(0.4, 0.4, 0.4, 1)
+                    btn.Icon:SetDesaturated(true)
+                else
+                    btn.Icon:SetVertexColor(1, 1, 1, 1)
+                    btn.Icon:SetDesaturated(false)
+                end
+                
+                local quality = GetInventoryItemQuality and GetInventoryItemQuality("player", slotId)
+                if quality and quality > 1 and GetItemQualityColor then
+                    local r, g, b = GetItemQualityColor(quality)
+                    if btn.Border then
+                        btn.Border:SetVertexColor(r, g, b, 1)
+                        btn.Border:Show()
+                    end
+                else
+                    if btn.Border then btn.Border:Hide() end
+                end
             else
+                if btn.Border then btn.Border:Hide() end
+                btn.Icon:SetDesaturated(false)
                 for _, list in ipairs({EquipmentSlotsLeft, EquipmentSlotsRight, EquipmentSlotsBottom}) do
                     for _, s in ipairs(list) do
                         if s.id == slotId then
@@ -854,7 +925,7 @@ local function CreateCharacterView(parentFrame)
     
     -- Event Listener
     container:SetScript("OnEvent", function(self, event, arg1)
-        if event == "PLAYER_EQUIPMENT_CHANGED" or event == "UNIT_STATS" or event == "PLAYER_DAMAGE_DONE_MODS" then
+        if event == "PLAYER_EQUIPMENT_CHANGED" or event == "UNIT_STATS" or event == "PLAYER_DAMAGE_DONE_MODS" or event == "ITEM_LOCK_CHANGED" or event == "CURSOR_CHANGED" then
             self:UpdateEquipment()
             if self.Model then self.Model:SetUnit("player") end
         elseif event == "UNIT_MODEL_CHANGED" or event == "UNIT_PORTRAIT_UPDATE" then
@@ -872,6 +943,8 @@ local function CreateCharacterView(parentFrame)
     container:RegisterEvent("PLAYER_DAMAGE_DONE_MODS")
     container:RegisterEvent("UNIT_MODEL_CHANGED")
     container:RegisterEvent("UNIT_PORTRAIT_UPDATE")
+    container:RegisterEvent("ITEM_LOCK_CHANGED")
+    container:RegisterEvent("CURSOR_CHANGED")
     
     return container
 end
