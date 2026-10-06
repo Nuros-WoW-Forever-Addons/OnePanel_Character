@@ -612,10 +612,13 @@ local function CreateCharacterView(parentFrame)
         self:SetVerticalScroll(newScroll)
     end)
     
-    -- Scrollbar Arrow Buttons Step Override (20px step per arrow click)
+    -- Scrollbar Anchor & Arrow Buttons Step Override (Inside subPanel frame)
     local sbName = statsView:GetName() .. "ScrollBar"
     local scrollBar = _G[sbName]
     if scrollBar then
+        scrollBar:ClearAllPoints()
+        scrollBar:SetPoint("TOPRIGHT", subContentView, "TOPRIGHT", -2, -18)
+        scrollBar:SetPoint("BOTTOMRIGHT", subContentView, "BOTTOMRIGHT", -2, 18)
         scrollBar:SetValueStep(20)
         local upBtn = _G[sbName .. "ScrollUpButton"]
         local downBtn = _G[sbName .. "ScrollDownButton"]
@@ -635,7 +638,7 @@ local function CreateCharacterView(parentFrame)
     end
     
     local statsContent = CreateFrame("Frame", "OnePanel_StatsContent", statsView)
-    statsContent:SetSize(184, 600)
+    statsContent:SetSize(180, 600)
     statsView:SetScrollChild(statsContent)
     subPanel.views["stats"] = statsView
     
@@ -657,7 +660,7 @@ local function CreateCharacterView(parentFrame)
                     headerBtn:Disable()
                 end
                 headerBtn:ClearAllPoints()
-                headerBtn:SetSize(178, 22)
+                headerBtn:SetSize(174, 22)
                 headerBtn:SetPoint("TOPLEFT", statsContent, "TOPLEFT", 3, yOffset)
                 headerBtn:SetText(entry.header)
                 headerBtn:Show()
@@ -684,7 +687,7 @@ local function CreateCharacterView(parentFrame)
                 end
                 
                 rowFrame:ClearAllPoints()
-                rowFrame:SetSize(178, 20)
+                rowFrame:SetSize(174, 20)
                 rowFrame:SetPoint("TOPLEFT", statsContent, "TOPLEFT", 3, yOffset)
                 
                 if dataRowCounter % 2 == 1 then
