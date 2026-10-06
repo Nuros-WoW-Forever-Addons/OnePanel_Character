@@ -191,17 +191,18 @@ local function CreateCharacterView(parentFrame)
     leftArea:SetWidth(338)
     
     -- Race-Specific Character Background Art (Dynamic 4-Tile Resolution matching CharacterModelScene)
+    local splitW = 338 * (319 / 399)
     local bgTL = leftArea:CreateTexture(nil, "BACKGROUND", nil, -8)
     bgTL:SetPoint("TOPLEFT", leftArea, "TOPLEFT", 0, 0)
-    bgTL:SetPoint("BOTTOMRIGHT", leftArea, "BOTTOMLEFT", 338 * 0.8, 424 * 0.28)
+    bgTL:SetPoint("BOTTOMRIGHT", leftArea, "TOPLEFT", splitW, -424 * (335 / 465))
     
     local bgTR = leftArea:CreateTexture(nil, "BACKGROUND", nil, -8)
     bgTR:SetPoint("TOPLEFT", bgTL, "TOPRIGHT", 0, 0)
-    bgTR:SetPoint("BOTTOMRIGHT", leftArea, "BOTTOMRIGHT", 0, 424 * 0.28)
+    bgTR:SetPoint("BOTTOMRIGHT", leftArea, "TOPRIGHT", 0, -424 * (335 / 465))
     
     local bgBL = leftArea:CreateTexture(nil, "BACKGROUND", nil, -8)
-    bgBL:SetPoint("TOPLEFT", leftArea, "BOTTOMLEFT", 0, 424 * 0.28)
-    bgBL:SetPoint("BOTTOMRIGHT", leftArea, "BOTTOMLEFT", 338 * 0.8, 0)
+    bgBL:SetPoint("TOPLEFT", bgTL, "BOTTOMLEFT", 0, 0)
+    bgBL:SetPoint("BOTTOMRIGHT", leftArea, "BOTTOMLEFT", splitW, 0)
     
     local bgBR = leftArea:CreateTexture(nil, "BACKGROUND", nil, -8)
     bgBR:SetPoint("TOPLEFT", bgBL, "TOPRIGHT", 0, 0)
@@ -209,7 +210,7 @@ local function CreateCharacterView(parentFrame)
     
     local bgOverlay = leftArea:CreateTexture(nil, "BACKGROUND", nil, -7)
     bgOverlay:SetAllPoints(leftArea)
-    pcall(function() bgOverlay:SetAtlas("UI-Character-Info-RaceBG-Overlay", true) end)
+    pcall(function() bgOverlay:SetAtlas("UI-Character-Info-RaceBG-Overlay", false) end)
     
     local function UpdateRaceBackgroundArt()
         local nativeScene = _G.CharacterModelScene
@@ -257,7 +258,7 @@ local function CreateCharacterView(parentFrame)
         
         local baseCamScale = 1.0
         local basePosY = 0     -- Horizontal offset (0 = centered)
-        local basePosZ = -0.15 -- Vertical offset (negative = lower onto ground)
+        local basePosZ = -0.08 -- Vertical offset (negative = lower onto ground)
         
         local form = GetShapeshiftForm and GetShapeshiftForm()
         if form and form > 0 then
@@ -266,35 +267,35 @@ local function CreateCharacterView(parentFrame)
             
             -- Detect form type
             if formID == 1 or (Enum and Enum.PowerType and powerType == Enum.PowerType.Rage) then
-                -- Bear form: Large quadruped, centered horizontally, lowered to ground
-                baseCamScale = 1.50
+                -- Bear form: Large quadruped, centered horizontally, raised to sit right above weapon buttons
+                baseCamScale = 1.55
                 basePosY = 0
-                basePosZ = -0.38
+                basePosZ = -0.20
             elseif formID == 5 or (Enum and Enum.PowerType and powerType == Enum.PowerType.Energy) then
                 -- Cat form: Lower, sleeker quadruped
-                baseCamScale = 1.25
+                baseCamScale = 1.30
                 basePosY = 0
-                basePosZ = -0.30
+                basePosZ = -0.15
             elseif formID == 31 then
                 -- Moonkin form: Bulky biped
-                baseCamScale = 1.40
+                baseCamScale = 1.45
                 basePosY = 0
-                basePosZ = -0.25
+                basePosZ = -0.12
             elseif formID == 3 or formID == 4 or formID == 27 then
                 -- Travel forms (Stag, Aquatic, Flight)
-                baseCamScale = 1.50
+                baseCamScale = 1.55
                 basePosY = 0
-                basePosZ = -0.35
+                basePosZ = -0.18
             elseif formID == 2 then
                 -- Tree of Life
                 baseCamScale = 1.35
                 basePosY = 0
-                basePosZ = -0.25
+                basePosZ = -0.15
             else
                 -- Fallback for other shapeshift forms
                 baseCamScale = 1.35
                 basePosY = 0
-                basePosZ = -0.25
+                basePosZ = -0.15
             end
         end
         
