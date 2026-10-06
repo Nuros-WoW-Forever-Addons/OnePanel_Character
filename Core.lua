@@ -203,7 +203,7 @@ local function CreateCharacterView(parentFrame)
         splitRatio = 0.90,
         overlayAlpha = 0.40,
         bearScale = 1.50,
-        bearPosZ = -0.32
+        bearPosZ = -0.24
     }
     
     local nudgeEditBox = nil
@@ -303,7 +303,7 @@ local function CreateCharacterView(parentFrame)
             if isBear then
                 baseCamScale = nudgeState.bearScale or 1.50
                 basePosY = 0
-                basePosZ = nudgeState.bearPosZ or -0.32
+                basePosZ = nudgeState.bearPosZ or -0.24
             elseif isCat then
                 baseCamScale = 1.30
                 basePosY = 0
