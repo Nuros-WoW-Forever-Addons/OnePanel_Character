@@ -256,8 +256,8 @@ local function CreateCharacterView(parentFrame)
         pcall(function() model:SetUnit("player") end)
         
         local baseCamScale = 1.0
-        local basePosY = 0
-        local basePosZ = 0
+        local basePosY = 0     -- Horizontal offset (0 = centered)
+        local basePosZ = -0.15 -- Vertical offset (negative = lower onto ground)
         
         local form = GetShapeshiftForm and GetShapeshiftForm()
         if form and form > 0 then
@@ -266,28 +266,35 @@ local function CreateCharacterView(parentFrame)
             
             -- Detect form type
             if formID == 1 or (Enum and Enum.PowerType and powerType == Enum.PowerType.Rage) then
-                -- Bear form: Large quadruped
-                baseCamScale = 1.65
-                basePosY = -0.15
+                -- Bear form: Large quadruped, centered horizontally, lowered to ground
+                baseCamScale = 1.50
+                basePosY = 0
+                basePosZ = -0.38
             elseif formID == 5 or (Enum and Enum.PowerType and powerType == Enum.PowerType.Energy) then
                 -- Cat form: Lower, sleeker quadruped
-                baseCamScale = 1.30
-                basePosY = -0.10
+                baseCamScale = 1.25
+                basePosY = 0
+                basePosZ = -0.30
             elseif formID == 31 then
                 -- Moonkin form: Bulky biped
-                baseCamScale = 1.45
-                basePosY = -0.10
+                baseCamScale = 1.40
+                basePosY = 0
+                basePosZ = -0.25
             elseif formID == 3 or formID == 4 or formID == 27 then
                 -- Travel forms (Stag, Aquatic, Flight)
-                baseCamScale = 1.55
-                basePosY = -0.15
+                baseCamScale = 1.50
+                basePosY = 0
+                basePosZ = -0.35
             elseif formID == 2 then
                 -- Tree of Life
-                baseCamScale = 1.40
+                baseCamScale = 1.35
+                basePosY = 0
+                basePosZ = -0.25
             else
                 -- Fallback for other shapeshift forms
-                baseCamScale = 1.40
-                basePosY = -0.10
+                baseCamScale = 1.35
+                basePosY = 0
+                basePosZ = -0.25
             end
         end
         
