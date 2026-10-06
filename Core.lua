@@ -192,27 +192,15 @@ local function CreateCharacterView(parentFrame)
     
     -- Dedicated Background Art Container bounded inside leftArea frame insets
     local bgContainer = CreateFrame("Frame", "OnePanel_CharacterBgContainer", leftArea)
-    bgContainer:SetPoint("TOPLEFT", leftArea, "TOPLEFT", 6, -6)
-    bgContainer:SetPoint("BOTTOMRIGHT", leftArea, "BOTTOMRIGHT", -6, 6)
+    bgContainer:SetPoint("TOPLEFT", leftArea, "TOPLEFT", 2, -2)
+    bgContainer:SetPoint("BOTTOMRIGHT", leftArea, "BOTTOMRIGHT", -2, 2)
     bgContainer:SetClipsChildren(true)
     
     -- Race-Specific Character Background Art (Dynamic 4-Tile Resolution matching CharacterModelScene)
-    local splitW = 326 * (319 / 399)
     local bgTL = bgContainer:CreateTexture(nil, "BACKGROUND", nil, -8)
-    bgTL:SetPoint("TOPLEFT", bgContainer, "TOPLEFT", 0, 0)
-    bgTL:SetPoint("BOTTOMRIGHT", bgContainer, "TOPLEFT", splitW, -301)
-    
     local bgTR = bgContainer:CreateTexture(nil, "BACKGROUND", nil, -8)
-    bgTR:SetPoint("TOPLEFT", bgTL, "TOPRIGHT", 0, 0)
-    bgTR:SetPoint("BOTTOMRIGHT", bgContainer, "TOPRIGHT", 0, -301)
-    
     local bgBL = bgContainer:CreateTexture(nil, "BACKGROUND", nil, -8)
-    bgBL:SetPoint("TOPLEFT", bgTL, "BOTTOMLEFT", 0, 0)
-    bgBL:SetPoint("BOTTOMRIGHT", bgContainer, "BOTTOMLEFT", splitW, 0)
-    
     local bgBR = bgContainer:CreateTexture(nil, "BACKGROUND", nil, -8)
-    bgBR:SetPoint("TOPLEFT", bgBL, "TOPRIGHT", 0, 0)
-    bgBR:SetPoint("BOTTOMRIGHT", bgContainer, "BOTTOMRIGHT", 0, 0)
     
     local bgOverlay = bgContainer:CreateTexture(nil, "BACKGROUND", nil, -7)
     bgOverlay:SetAllPoints(bgContainer)
@@ -220,6 +208,30 @@ local function CreateCharacterView(parentFrame)
     bgOverlay:SetAlpha(0.4)
     
     local function UpdateRaceBackgroundArt()
+        local w = bgContainer:GetWidth()
+        local h = bgContainer:GetHeight()
+        if not w or w == 0 then w = 334 end
+        if not h or h == 0 then h = 427 end
+        
+        local splitW = w * (319 / 399)
+        local splitH = h * (130 / 465) -- Bottom tile height (28% of frame height)
+        
+        bgTL:ClearAllPoints()
+        bgTL:SetPoint("TOPLEFT", bgContainer, "TOPLEFT", 0, 0)
+        bgTL:SetPoint("BOTTOMRIGHT", bgContainer, "BOTTOMLEFT", splitW, splitH)
+        
+        bgTR:ClearAllPoints()
+        bgTR:SetPoint("TOPLEFT", bgTL, "TOPRIGHT", 0, 0)
+        bgTR:SetPoint("BOTTOMRIGHT", bgContainer, "BOTTOMRIGHT", 0, splitH)
+        
+        bgBL:ClearAllPoints()
+        bgBL:SetPoint("TOPLEFT", bgTL, "BOTTOMLEFT", 0, 0)
+        bgBL:SetPoint("BOTTOMRIGHT", bgContainer, "BOTTOMLEFT", splitW, 0)
+        
+        bgBR:ClearAllPoints()
+        bgBR:SetPoint("TOPLEFT", bgBL, "TOPRIGHT", 0, 0)
+        bgBR:SetPoint("BOTTOMRIGHT", bgContainer, "BOTTOMRIGHT", 0, 0)
+        
         local nativeScene = _G.CharacterModelScene
         if nativeScene and nativeScene.GetRegions then
             local regs = { nativeScene:GetRegions() }
