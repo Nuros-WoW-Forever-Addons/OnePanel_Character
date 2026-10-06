@@ -190,26 +190,32 @@ local function CreateCharacterView(parentFrame)
     leftArea:SetPoint("BOTTOMLEFT", container, "BOTTOMLEFT", 0, 0)
     leftArea:SetWidth(338)
     
+    -- Dedicated Background Art Container bounded inside leftArea frame insets
+    local bgContainer = CreateFrame("Frame", "OnePanel_CharacterBgContainer", leftArea)
+    bgContainer:SetPoint("TOPLEFT", leftArea, "TOPLEFT", 6, -6)
+    bgContainer:SetPoint("BOTTOMRIGHT", leftArea, "BOTTOMRIGHT", -6, 6)
+    bgContainer:SetClipsChildren(true)
+    
     -- Race-Specific Character Background Art (Dynamic 4-Tile Resolution matching CharacterModelScene)
-    local splitW = 338 * (319 / 399)
-    local bgTL = leftArea:CreateTexture(nil, "BACKGROUND", nil, -8)
-    bgTL:SetPoint("TOPLEFT", leftArea, "TOPLEFT", 0, 0)
-    bgTL:SetPoint("BOTTOMRIGHT", leftArea, "TOPLEFT", splitW, -310)
+    local splitW = 326 * (319 / 399)
+    local bgTL = bgContainer:CreateTexture(nil, "BACKGROUND", nil, -8)
+    bgTL:SetPoint("TOPLEFT", bgContainer, "TOPLEFT", 0, 0)
+    bgTL:SetPoint("BOTTOMRIGHT", bgContainer, "TOPLEFT", splitW, -301)
     
-    local bgTR = leftArea:CreateTexture(nil, "BACKGROUND", nil, -8)
+    local bgTR = bgContainer:CreateTexture(nil, "BACKGROUND", nil, -8)
     bgTR:SetPoint("TOPLEFT", bgTL, "TOPRIGHT", 0, 0)
-    bgTR:SetPoint("BOTTOMRIGHT", leftArea, "TOPRIGHT", 0, -310)
+    bgTR:SetPoint("BOTTOMRIGHT", bgContainer, "TOPRIGHT", 0, -301)
     
-    local bgBL = leftArea:CreateTexture(nil, "BACKGROUND", nil, -8)
+    local bgBL = bgContainer:CreateTexture(nil, "BACKGROUND", nil, -8)
     bgBL:SetPoint("TOPLEFT", bgTL, "BOTTOMLEFT", 0, 0)
-    bgBL:SetPoint("BOTTOMRIGHT", leftArea, "BOTTOMLEFT", splitW, -4)
+    bgBL:SetPoint("BOTTOMRIGHT", bgContainer, "BOTTOMLEFT", splitW, 0)
     
-    local bgBR = leftArea:CreateTexture(nil, "BACKGROUND", nil, -8)
+    local bgBR = bgContainer:CreateTexture(nil, "BACKGROUND", nil, -8)
     bgBR:SetPoint("TOPLEFT", bgBL, "TOPRIGHT", 0, 0)
-    bgBR:SetPoint("BOTTOMRIGHT", leftArea, "BOTTOMRIGHT", 0, -4)
+    bgBR:SetPoint("BOTTOMRIGHT", bgContainer, "BOTTOMRIGHT", 0, 0)
     
-    local bgOverlay = leftArea:CreateTexture(nil, "BACKGROUND", nil, -7)
-    bgOverlay:SetAllPoints(leftArea)
+    local bgOverlay = bgContainer:CreateTexture(nil, "BACKGROUND", nil, -7)
+    bgOverlay:SetAllPoints(bgContainer)
     pcall(function() bgOverlay:SetAtlas("UI-Character-Info-RaceBG-Overlay", false) end)
     bgOverlay:SetAlpha(0.4)
     
@@ -245,10 +251,9 @@ local function CreateCharacterView(parentFrame)
     UpdateRaceBackgroundArt()
     
     -- Central 3D Player Portrait Model (Matches CharacterModelScene at Frame Level 50)
-    local model = CreateFrame("PlayerModel", "OnePanel_Character3DPlayerModel", leftArea)
-    model:SetSize(398, 404)
-    model:SetPoint("TOPLEFT", leftArea, "TOPLEFT", 0, 0)
-    model:SetPoint("BOTTOMRIGHT", leftArea, "BOTTOMRIGHT", 0, 0)
+    local model = CreateFrame("PlayerModel", "OnePanel_Character3DPlayerModel", bgContainer)
+    model:SetPoint("TOPLEFT", bgContainer, "TOPLEFT", 0, 0)
+    model:SetPoint("BOTTOMRIGHT", bgContainer, "BOTTOMRIGHT", 0, 0)
     model:SetFrameLevel(50)
     container.Model = model
     
