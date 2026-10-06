@@ -190,51 +190,57 @@ local function CreateCharacterView(parentFrame)
     leftArea:SetPoint("BOTTOMLEFT", container, "BOTTOMLEFT", 0, 0)
     leftArea:SetWidth(338)
     
-    -- Race-Specific Character Background Art
-    local _, raceFile = UnitRace("player")
-    raceFile = raceFile or "NightElf"
+    -- Race-Specific Character Background Art (Dynamic 4-Tile Resolution matching CharacterModelScene)
+    local bgTL = leftArea:CreateTexture(nil, "BACKGROUND", nil, -8)
+    bgTL:SetPoint("TOPLEFT", leftArea, "TOPLEFT", 0, 0)
+    bgTL:SetPoint("BOTTOMRIGHT", leftArea, "BOTTOMLEFT", 338 * 0.8, 424 * 0.28)
     
-    local modelBg = leftArea:CreateTexture(nil, "BACKGROUND", nil, -7)
-    modelBg:SetPoint("TOPLEFT", leftArea, "TOPLEFT", 8, -8)
-    modelBg:SetPoint("BOTTOMRIGHT", leftArea, "BOTTOMRIGHT", -8, 8)
+    local bgTR = leftArea:CreateTexture(nil, "BACKGROUND", nil, -8)
+    bgTR:SetPoint("TOPLEFT", bgTL, "TOPRIGHT", 0, 0)
+    bgTR:SetPoint("BOTTOMRIGHT", leftArea, "BOTTOMRIGHT", 0, 424 * 0.28)
     
-    -- Try Atlases first (Modern WoW / Retail / Cataclysm), then fallback to file paths
-    local raceVariant = (raceFile == "Scourge") and "Undead" or raceFile
-    local atlasList = {
-        "Character-Background-" .. raceFile,
-        "Character-Background-" .. raceVariant,
-        "UI-PaperDoll-Background-" .. raceFile,
-        "UI-Character-Info-Background-" .. raceFile,
-        "character-background-" .. raceFile:lower(),
-    }
+    local bgBL = leftArea:CreateTexture(nil, "BACKGROUND", nil, -8)
+    bgBL:SetPoint("TOPLEFT", leftArea, "BOTTOMLEFT", 0, 424 * 0.28)
+    bgBL:SetPoint("BOTTOMRIGHT", leftArea, "BOTTOMLEFT", 338 * 0.8, 0)
     
-    local setBgSuccess = false
-    for _, atlasName in ipairs(atlasList) do
-        local ok = pcall(function() modelBg:SetAtlas(atlasName, false) end)
-        if ok and modelBg:GetTexture() then
-            setBgSuccess = true
-            break
-        end
-    end
+    local bgBR = leftArea:CreateTexture(nil, "BACKGROUND", nil, -8)
+    bgBR:SetPoint("TOPLEFT", bgBL, "TOPRIGHT", 0, 0)
+    bgBR:SetPoint("BOTTOMRIGHT", leftArea, "BOTTOMRIGHT", 0, 0)
     
-    if not setBgSuccess then
-        local texturePaths = {
-            "Interface\\PaperDollHeaderFooters\\UI-PaperDoll-Background-" .. raceFile,
-            "Interface\\PaperDollHeaderFooters\\UI-PaperDoll-Background-" .. raceVariant,
-            "Interface\\DressUpFrame\\DressUpBackground-" .. raceFile,
-            "Interface\\FrameGeneral\\UI-Background-Marble",
-        }
-        for _, path in ipairs(texturePaths) do
-            local ok = pcall(function() modelBg:SetTexture(path) end)
-            if ok and modelBg:GetTexture() then
-                break
+    local bgOverlay = leftArea:CreateTexture(nil, "BACKGROUND", nil, -7)
+    bgOverlay:SetAllPoints(leftArea)
+    pcall(function() bgOverlay:SetAtlas("UI-Character-Info-RaceBG-Overlay", true) end)
+    
+    local function UpdateRaceBackgroundArt()
+        local nativeScene = _G.CharacterModelScene
+        if nativeScene and nativeScene.GetRegions then
+            local regs = { nativeScene:GetRegions() }
+            local bgTextures = {}
+            for _, r in ipairs(regs) do
+                if r:GetObjectType() == "Texture" and r:GetDrawLayer() == "BACKGROUND" then
+                    local tex = r:GetTexture()
+                    if tex then table.insert(bgTextures, tex) end
+                end
+            end
+            if #bgTextures >= 4 then
+                bgTL:SetTexture(bgTextures[1])
+                bgTR:SetTexture(bgTextures[2])
+                bgBL:SetTexture(bgTextures[3])
+                bgBR:SetTexture(bgTextures[4])
+                return true
             end
         end
+        
+        -- Explicit File ID Fallback from native CharacterModelScene dump (8280900, 8280901, 8280904, 8280905)
+        bgTL:SetTexture(8280900)
+        bgTR:SetTexture(8280901)
+        bgBL:SetTexture(8280904)
+        bgBR:SetTexture(8280905)
+        return true
     end
     
-    local modelVignette = leftArea:CreateTexture(nil, "BORDER")
-    modelVignette:SetAllPoints(modelBg)
-    modelVignette:SetColorTexture(0, 0, 0, 0.15)
+    container.UpdateRaceBackgroundArt = UpdateRaceBackgroundArt
+    UpdateRaceBackgroundArt()
     
     -- Central 3D Player Portrait Model
     -- Central 3D Player Portrait Model (Matches CharacterModelScene at Frame Level 50)
@@ -999,6 +1005,9 @@ local function RegisterPlugin()
             end
             if container and container.UpdateEquipment then
                 container:UpdateEquipment()
+            end
+            if container and container.UpdateRaceBackgroundArt then
+                container:UpdateRaceBackgroundArt()
             end
             if container and container.SubPanel and container.SubPanel.tabButtons and container.SubPanel.tabButtons["stats"] then
                 local btn = container.SubPanel.tabButtons["stats"]
