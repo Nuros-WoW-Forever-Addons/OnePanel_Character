@@ -433,28 +433,28 @@ local function CreateCharacterView(parentFrame)
         "Zoom Out", 
         function() ZoomModel(0.03) end,
         function(elapsed) ZoomModel(0.35 * elapsed) end)
-    btnZoomOut:SetPoint("RIGHT", btnRotLeft, "LEFT", 0, 0)
+    btnZoomOut:SetPoint("RIGHT", btnRotLeft, "LEFT", 2, 0)
     
     local btnZoomIn = CreateBlizzardModelButton("OnePanel_BtnZoomIn", 
         "common-icon-zoomin", "Interface\\Buttons\\UI-PlusButton-Up",
         "Zoom In", 
         function() ZoomModel(-0.03) end,
         function(elapsed) ZoomModel(-0.35 * elapsed) end)
-    btnZoomIn:SetPoint("RIGHT", btnZoomOut, "LEFT", 0, 0)
+    btnZoomIn:SetPoint("RIGHT", btnZoomOut, "LEFT", 2, 0)
     
     local btnRotRight = CreateBlizzardModelButton("OnePanel_BtnRotRight", 
         "common-icon-rotateright", "Interface\\Buttons\\UI-RotationRight-Button-Up",
         "Rotate Right", 
         function() RotateModel(0.15) end,
         function(elapsed) RotateModel(1.8 * elapsed) end)
-    btnRotRight:SetPoint("LEFT", btnRotLeft, "RIGHT", 0, 0)
+    btnRotRight:SetPoint("LEFT", btnRotLeft, "RIGHT", -2, 0)
     
     local btnReset = CreateBlizzardModelButton("OnePanel_BtnReset", 
         "common-icon-undo", "Interface\\Buttons\\UI-RefreshButton",
         "Reset Model & Camera", 
         function() ResetModel() end,
         nil)
-    btnReset:SetPoint("LEFT", btnRotRight, "RIGHT", 0, 0)
+    btnReset:SetPoint("LEFT", btnRotRight, "RIGHT", -2, 0)
     
     ---------------------------------------------------------------------------
     -- Equipment Slot Buttons (Matches Native Anchors & Frame Level 101)
