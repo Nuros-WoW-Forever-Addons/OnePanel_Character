@@ -193,18 +193,48 @@ local function CreateCharacterView(parentFrame)
     -- Race-Specific Character Background Art
     local _, raceFile = UnitRace("player")
     raceFile = raceFile or "NightElf"
-    if raceFile == "Scourge" then raceFile = "Scourge" end
-    local bgTexturePath = "Interface\\PaperDollHeaderFooters\\UI-PaperDoll-Background-" .. raceFile
     
     local modelBg = leftArea:CreateTexture(nil, "BACKGROUND", nil, -7)
-    modelBg:SetPoint("TOPLEFT", leftArea, "TOPLEFT", 10, -10)
-    modelBg:SetPoint("BOTTOMRIGHT", leftArea, "BOTTOMRIGHT", -10, 10)
-    modelBg:SetTexture(bgTexturePath)
-    modelBg:SetTexCoord(0, 1, 0, 1)
+    modelBg:SetPoint("TOPLEFT", leftArea, "TOPLEFT", 8, -8)
+    modelBg:SetPoint("BOTTOMRIGHT", leftArea, "BOTTOMRIGHT", -8, 8)
+    
+    -- Try Atlases first (Modern WoW / Retail / Cataclysm), then fallback to file paths
+    local raceVariant = (raceFile == "Scourge") and "Undead" or raceFile
+    local atlasList = {
+        "Character-Background-" .. raceFile,
+        "Character-Background-" .. raceVariant,
+        "UI-PaperDoll-Background-" .. raceFile,
+        "UI-Character-Info-Background-" .. raceFile,
+        "character-background-" .. raceFile:lower(),
+    }
+    
+    local setBgSuccess = false
+    for _, atlasName in ipairs(atlasList) do
+        local ok = pcall(function() modelBg:SetAtlas(atlasName, false) end)
+        if ok and modelBg:GetTexture() then
+            setBgSuccess = true
+            break
+        end
+    end
+    
+    if not setBgSuccess then
+        local texturePaths = {
+            "Interface\\PaperDollHeaderFooters\\UI-PaperDoll-Background-" .. raceFile,
+            "Interface\\PaperDollHeaderFooters\\UI-PaperDoll-Background-" .. raceVariant,
+            "Interface\\DressUpFrame\\DressUpBackground-" .. raceFile,
+            "Interface\\FrameGeneral\\UI-Background-Marble",
+        }
+        for _, path in ipairs(texturePaths) do
+            local ok = pcall(function() modelBg:SetTexture(path) end)
+            if ok and modelBg:GetTexture() then
+                break
+            end
+        end
+    end
     
     local modelVignette = leftArea:CreateTexture(nil, "BORDER")
     modelVignette:SetAllPoints(modelBg)
-    modelVignette:SetColorTexture(0, 0, 0, 0.25)
+    modelVignette:SetColorTexture(0, 0, 0, 0.15)
     
     -- Central 3D Player Portrait Model
     -- Central 3D Player Portrait Model (Matches CharacterModelScene at Frame Level 50)
