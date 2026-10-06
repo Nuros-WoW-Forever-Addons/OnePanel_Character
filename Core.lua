@@ -194,23 +194,24 @@ local function CreateCharacterView(parentFrame)
     local splitW = 338 * (319 / 399)
     local bgTL = leftArea:CreateTexture(nil, "BACKGROUND", nil, -8)
     bgTL:SetPoint("TOPLEFT", leftArea, "TOPLEFT", 0, 0)
-    bgTL:SetPoint("BOTTOMRIGHT", leftArea, "TOPLEFT", splitW, -424 * (335 / 465))
+    bgTL:SetPoint("BOTTOMRIGHT", leftArea, "TOPLEFT", splitW, -310)
     
     local bgTR = leftArea:CreateTexture(nil, "BACKGROUND", nil, -8)
     bgTR:SetPoint("TOPLEFT", bgTL, "TOPRIGHT", 0, 0)
-    bgTR:SetPoint("BOTTOMRIGHT", leftArea, "TOPRIGHT", 0, -424 * (335 / 465))
+    bgTR:SetPoint("BOTTOMRIGHT", leftArea, "TOPRIGHT", 0, -310)
     
     local bgBL = leftArea:CreateTexture(nil, "BACKGROUND", nil, -8)
     bgBL:SetPoint("TOPLEFT", bgTL, "BOTTOMLEFT", 0, 0)
-    bgBL:SetPoint("BOTTOMRIGHT", leftArea, "BOTTOMLEFT", splitW, 0)
+    bgBL:SetPoint("BOTTOMRIGHT", leftArea, "BOTTOMLEFT", splitW, -4)
     
     local bgBR = leftArea:CreateTexture(nil, "BACKGROUND", nil, -8)
     bgBR:SetPoint("TOPLEFT", bgBL, "TOPRIGHT", 0, 0)
-    bgBR:SetPoint("BOTTOMRIGHT", leftArea, "BOTTOMRIGHT", 0, 0)
+    bgBR:SetPoint("BOTTOMRIGHT", leftArea, "BOTTOMRIGHT", 0, -4)
     
     local bgOverlay = leftArea:CreateTexture(nil, "BACKGROUND", nil, -7)
     bgOverlay:SetAllPoints(leftArea)
     pcall(function() bgOverlay:SetAtlas("UI-Character-Info-RaceBG-Overlay", false) end)
+    bgOverlay:SetAlpha(0.4)
     
     local function UpdateRaceBackgroundArt()
         local nativeScene = _G.CharacterModelScene
