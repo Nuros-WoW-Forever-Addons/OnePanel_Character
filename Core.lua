@@ -188,7 +188,7 @@ local function CreateCharacterView(parentFrame)
     local leftArea = CreateFrame("Frame", "OnePanel_CharacterLeftArea", container)
     leftArea:SetPoint("TOPLEFT", container, "TOPLEFT", 0, 0)
     leftArea:SetPoint("BOTTOMLEFT", container, "BOTTOMLEFT", 0, 0)
-    leftArea:SetWidth(460)
+    leftArea:SetWidth(338)
     
     -- Race-Specific Character Background Art
     local _, raceFile = UnitRace("player")
