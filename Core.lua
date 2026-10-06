@@ -201,10 +201,13 @@ local function CreateCharacterView(parentFrame)
         bottomInset = -13,
         rightInset = 3,
         splitRatio = 0.90,
-        overlayAlpha = 0.40
+        overlayAlpha = 0.40,
+        bearScale = 1.50,
+        bearPosZ = -0.32
     }
     
     local nudgeEditBox = nil
+    local RefreshPlayerModel = nil
     
     -- Race-Specific Character Background Art (Dynamic 4-Tile Resolution matching CharacterModelScene)
     local bgTL = bgContainer:CreateTexture(nil, "BACKGROUND", nil, -8)
@@ -279,11 +282,15 @@ local function CreateCharacterView(parentFrame)
             bgOverlay:SetAlpha(nudgeState.overlayAlpha)
         end
         UpdateRaceBackgroundArt()
+        if RefreshPlayerModel then
+            RefreshPlayerModel()
+        end
         if nudgeEditBox then
             nudgeEditBox:SetText(string.format(
-                "Top: %d | Left: %d | Bottom: %d | Right: %d | Split: %d%% | Alpha: %.2f",
+                "Top: %d | Left: %d | Bottom: %d | Right: %d | Split: %d%% | Alpha: %.2f | BearZ: %.2f | BearScale: %.2f",
                 nudgeState.topInset, nudgeState.leftInset, nudgeState.bottomInset, nudgeState.rightInset,
-                math.floor(nudgeState.splitRatio * 100 + 0.5), nudgeState.overlayAlpha
+                math.floor(nudgeState.splitRatio * 100 + 0.5), nudgeState.overlayAlpha,
+                nudgeState.bearPosZ, nudgeState.bearScale
             ))
         end
     end
@@ -298,7 +305,7 @@ local function CreateCharacterView(parentFrame)
         if _G["OnePanel_BackgroundNudgerFrame"] then return _G["OnePanel_BackgroundNudgerFrame"] end
         
         local nudger = CreateFrame("Frame", "OnePanel_BackgroundNudgerFrame", UIParent, "DialogBoxFrame")
-        nudger:SetSize(380, 310)
+        nudger:SetSize(380, 360)
         nudger:SetPoint("CENTER", UIParent, "CENTER", 280, 0)
         nudger:SetFrameStrata("TOOLTIP")
         nudger:SetMovable(true)
@@ -309,9 +316,9 @@ local function CreateCharacterView(parentFrame)
         
         local title = nudger:CreateFontString(nil, "OVERLAY", "GameFontHighlightLarge")
         title:SetPoint("TOP", nudger, "TOP", 0, -12)
-        title:SetText("Background Art Nudger")
+        title:SetText("Background Art & Doll Nudger")
         
-        local yOffset = -42
+        local yOffset = -38
         local function AddNudgeRow(labelStr, getValueStr, onStep)
             local lbl = nudger:CreateFontString(nil, "OVERLAY", "GameFontNormal")
             lbl:SetPoint("TOPLEFT", nudger, "TOPLEFT", 16, yOffset)
@@ -319,22 +326,22 @@ local function CreateCharacterView(parentFrame)
             lbl:SetJustifyH("LEFT")
             
             local btnM5 = CreateFrame("Button", nil, nudger, "UIPanelButtonTemplate")
-            btnM5:SetSize(40, 22)
+            btnM5:SetSize(40, 20)
             btnM5:SetPoint("LEFT", lbl, "RIGHT", 4, 0)
             btnM5:SetText("-5")
             
             local btnM1 = CreateFrame("Button", nil, nudger, "UIPanelButtonTemplate")
-            btnM1:SetSize(36, 22)
+            btnM1:SetSize(36, 20)
             btnM1:SetPoint("LEFT", btnM5, "RIGHT", 2, 0)
             btnM1:SetText("-1")
             
             local btnP1 = CreateFrame("Button", nil, nudger, "UIPanelButtonTemplate")
-            btnP1:SetSize(36, 22)
+            btnP1:SetSize(36, 20)
             btnP1:SetPoint("LEFT", btnM1, "RIGHT", 2, 0)
             btnP1:SetText("+1")
             
             local btnP5 = CreateFrame("Button", nil, nudger, "UIPanelButtonTemplate")
-            btnP5:SetSize(40, 22)
+            btnP5:SetSize(40, 20)
             btnP5:SetPoint("LEFT", btnP1, "RIGHT", 2, 0)
             btnP5:SetText("+5")
             
@@ -352,7 +359,7 @@ local function CreateCharacterView(parentFrame)
             btnP5:SetScript("OnClick", function() onStep(5) UpdateRow() ApplyNudgeSettings() end)
             
             UpdateRow()
-            yOffset = yOffset - 30
+            yOffset = yOffset - 26
         end
         
         -- Row 1: Top Inset
@@ -383,6 +390,16 @@ local function CreateCharacterView(parentFrame)
         -- Row 6: Overlay Alpha
         AddNudgeRow("Alpha", function() return string.format("%.2f", nudgeState.overlayAlpha) end, function(step)
             nudgeState.overlayAlpha = math.max(0.0, math.min(1.0, nudgeState.overlayAlpha + step * 0.05))
+        end)
+        
+        -- Row 7: Bear Height (Z)
+        AddNudgeRow("Bear Height Z", function() return string.format("%.2f", nudgeState.bearPosZ) end, function(step)
+            nudgeState.bearPosZ = nudgeState.bearPosZ + (step * 0.02)
+        end)
+        
+        -- Row 8: Bear Scale
+        AddNudgeRow("Bear Scale", function() return string.format("%.2f", nudgeState.bearScale) end, function(step)
+            nudgeState.bearScale = math.max(0.5, math.min(3.0, nudgeState.bearScale + (step * 0.02)))
         end)
         
         -- Output Copy Box
@@ -431,10 +448,10 @@ local function CreateCharacterView(parentFrame)
             
             -- Detect form type
             if formID == 1 or (Enum and Enum.PowerType and powerType == Enum.PowerType.Rage) then
-                -- Bear form: Large quadruped, centered horizontally, raised to sit right above weapon buttons
-                baseCamScale = 1.55
+                -- Bear form: Large quadruped, lowered so paws sit at exact same foot level as Elf doll
+                baseCamScale = nudgeState.bearScale or 1.50
                 basePosY = 0
-                basePosZ = -0.20
+                basePosZ = nudgeState.bearPosZ or -0.32
             elseif formID == 5 or (Enum and Enum.PowerType and powerType == Enum.PowerType.Energy) then
                 -- Cat form: Lower, sleeker quadruped
                 baseCamScale = 1.30
