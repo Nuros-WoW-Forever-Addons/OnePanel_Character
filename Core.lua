@@ -534,7 +534,7 @@ local function CreateCharacterView(parentFrame)
         if not _G["OnePanel_EquipmentFlyout"] then
             local flyout = CreateFrame("Frame", "OnePanel_EquipmentFlyout", UIParent)
             flyout:SetSize(230, 180)
-            flyout:SetFrameStrata("POPUP")
+            flyout:SetFrameStrata("DIALOG")
             flyout:SetFrameLevel(600)
             flyout:SetClampedToScreen(true)
             
@@ -1297,109 +1297,12 @@ local function CreateCharacterView(parentFrame)
         return cachedIconList
     end
 
-    local function ShowIconPickerDialog(onSelectCallback)
-        if not _G["OnePanel_IconPickerDialog"] then
-            local picker = CreateFrame("Frame", "OnePanel_IconPickerDialog", UIParent)
-            picker:SetSize(340, 320)
-            picker:SetPoint("CENTER", UIParent, "CENTER", 0, 30)
-            picker:SetFrameStrata("DIALOG")
-            picker:SetFrameLevel(1100)
-            picker:SetMovable(true)
-            picker:EnableMouse(true)
-            picker:RegisterForDrag("LeftButton")
-            picker:SetScript("OnDragStart", picker.StartMoving)
-            picker:SetScript("OnDragStop", picker.StopMovingOrSizing)
-            
-            if Utils and Utils.FrameHelper then
-                Utils.FrameHelper:ApplyBackdrop(picker,
-                    "Interface\\FrameGeneral\\UI-Background-Marble",
-                    "Interface\\Tooltips\\UI-Tooltip-Border",
-                    16, 16, { left = 4, right = 4, top = 4, bottom = 4 }
-                )
-            end
-            
-            local titleBg = picker:CreateTexture(nil, "ARTWORK")
-            titleBg:SetSize(332, 24)
-            titleBg:SetPoint("TOP", picker, "TOP", 0, -4)
-            titleBg:SetColorTexture(0.1, 0.1, 0.1, 0.6)
-            
-            local pickerTitle = picker:CreateFontString(nil, "OVERLAY", "GameFontHighlight")
-            pickerTitle:SetPoint("CENTER", titleBg, "CENTER", 0, 0)
-            pickerTitle:SetText("Select Equipment Set Icon")
-            
-            local closeBtn = CreateFrame("Button", nil, picker, "UIPanelCloseButton")
-            closeBtn:SetPoint("TOPRIGHT", picker, "TOPRIGHT", -2, -2)
-            
-            local scrollFrame = CreateFrame("ScrollFrame", "OnePanel_IconPickerScroll", picker, "UIPanelScrollFrameTemplate")
-            scrollFrame:SetPoint("TOPLEFT", picker, "TOPLEFT", 12, -34)
-            scrollFrame:SetPoint("BOTTOMRIGHT", picker, "BOTTOMRIGHT", -32, 12)
-            
-            local content = CreateFrame("Frame", "OnePanel_IconPickerContent", scrollFrame)
-            content:SetSize(276, 400)
-            scrollFrame:SetScrollChild(content)
-            picker.Content = content
-        end
-        
-        local picker = _G["OnePanel_IconPickerDialog"]
-        picker.onSelectCallback = onSelectCallback
-        
-        local icons = GetAvailableIcons()
-        local content = picker.Content
-        
-        if not content.buttons then content.buttons = {} end
-        for _, btn in ipairs(content.buttons) do btn:Hide() end
-        
-        local btnSize = 34
-        local cols = 7
-        local spacing = 4
-        local startX = 4
-        local startY = -4
-        
-        for idx, iconID in ipairs(icons) do
-            local btn = content.buttons[idx]
-            if not btn then
-                btn = CreateFrame("Button", nil, content)
-                btn:SetSize(btnSize, btnSize)
-                
-                local tex = btn:CreateTexture(nil, "ARTWORK")
-                tex:SetAllPoints(btn)
-                tex:SetTexCoord(0.08, 0.92, 0.08, 0.92)
-                btn.Tex = tex
-                
-                local hl = btn:CreateTexture(nil, "HIGHLIGHT")
-                hl:SetTexture("Interface\\Buttons\\ButtonHilight-Square")
-                hl:SetBlendMode("ADD")
-                hl:SetAllPoints(btn)
-                
-                content.buttons[idx] = btn
-            end
-            
-            local col = (idx - 1) % cols
-            local row = math.floor((idx - 1) / cols)
-            btn:ClearAllPoints()
-            btn:SetPoint("TOPLEFT", content, "TOPLEFT", startX + col * (btnSize + spacing), startY - row * (btnSize + spacing))
-            
-            btn.Tex:SetTexture(iconID)
-            btn:SetScript("OnClick", function()
-                if picker.onSelectCallback then
-                    picker.onSelectCallback(iconID)
-                end
-                picker:Hide()
-            end)
-            btn:Show()
-        end
-        
-        local totalRows = math.ceil(#icons / cols)
-        content:SetHeight(totalRows * (btnSize + spacing) + 12)
-        picker:Show()
-    end
-
-    -- New / Edit Equipment Set Modal Dialog
+    -- New / Edit Equipment Set Modal Dialog (With Embedded Icon Picker Grid)
     ShowNewSetDialog = function(defaultName, defaultIconID, existingSetID)
         if not _G["OnePanel_NewSetDialog"] then
             local dlg = CreateFrame("Frame", "OnePanel_NewSetDialog", UIParent)
-            dlg:SetSize(340, 160)
-            dlg:SetPoint("CENTER", UIParent, "CENTER", 0, 40)
+            dlg:SetSize(360, 340)
+            dlg:SetPoint("CENTER", UIParent, "CENTER", 0, 30)
             dlg:SetFrameStrata("DIALOG")
             dlg:SetFrameLevel(1000)
             dlg:SetMovable(true)
@@ -1417,7 +1320,7 @@ local function CreateCharacterView(parentFrame)
             end
             
             local titleBg = dlg:CreateTexture(nil, "ARTWORK")
-            titleBg:SetSize(332, 24)
+            titleBg:SetSize(352, 24)
             titleBg:SetPoint("TOP", dlg, "TOP", 0, -4)
             titleBg:SetColorTexture(0.1, 0.1, 0.1, 0.6)
             
@@ -1425,49 +1328,48 @@ local function CreateCharacterView(parentFrame)
             dlgTitle:SetPoint("CENTER", titleBg, "CENTER", 0, 0)
             dlg.Title = dlgTitle
             
-            -- Interactive Icon Button
-            local iconBtn = CreateFrame("Button", "OnePanel_NewSetIconBtn", dlg)
-            iconBtn:SetSize(40, 40)
-            iconBtn:SetPoint("TOPLEFT", dlg, "TOPLEFT", 18, -42)
-            
-            local iconTex = iconBtn:CreateTexture(nil, "ARTWORK")
-            iconTex:SetAllPoints(iconBtn)
-            iconTex:SetTexCoord(0.08, 0.92, 0.08, 0.92)
-            dlg.IconTex = iconTex
-            
-            local iconBorder = iconBtn:CreateTexture(nil, "OVERLAY")
-            iconBorder:SetTexture("Interface\\Buttons\\UI-ActionButton-Border")
-            iconBorder:SetBlendMode("ADD")
-            iconBorder:SetAllPoints(iconBtn)
-            
-            local iconHl = iconBtn:CreateTexture(nil, "HIGHLIGHT")
-            iconHl:SetTexture("Interface\\Buttons\\ButtonHilight-Square")
-            iconHl:SetBlendMode("ADD")
-            iconHl:SetAllPoints(iconBtn)
-            
-            iconBtn:SetScript("OnEnter", function(self)
-                GameTooltip:SetOwner(self, "ANCHOR_TOP")
-                GameTooltip:SetText("Click to select set icon", 1, 1, 1)
-                GameTooltip:Show()
-            end)
-            iconBtn:SetScript("OnLeave", function() GameTooltip_Hide() end)
-            
-            iconBtn:SetScript("OnClick", function()
-                ShowIconPickerDialog(function(newIconID)
-                    dlg.selectedIconID = newIconID
-                    dlg.IconTex:SetTexture(newIconID)
-                end)
-            end)
-            
+            -- Set Name Input Label & EditBox
             local inputLabel = dlg:CreateFontString(nil, "OVERLAY", "GameFontNormalSmall")
-            inputLabel:SetPoint("TOPLEFT", iconBtn, "TOPRIGHT", 12, 2)
-            inputLabel:SetText("Set Name:")
+            inputLabel:SetPoint("TOPLEFT", dlg, "TOPLEFT", 16, -34)
+            inputLabel:SetText("Enter Set Name:")
             
             local input = CreateFrame("EditBox", "OnePanel_NewSetInput", dlg, "InputBoxTemplate")
-            input:SetSize(230, 22)
+            input:SetSize(210, 22)
             input:SetPoint("TOPLEFT", inputLabel, "BOTTOMLEFT", 0, -4)
             input:SetAutoFocus(true)
             dlg.Input = input
+            
+            -- Currently Selected Icon Preview (Top Right)
+            local selLabel = dlg:CreateFontString(nil, "OVERLAY", "GameFontDisableSmall")
+            selLabel:SetPoint("TOPRIGHT", dlg, "TOPRIGHT", -16, -34)
+            selLabel:SetText("Selected Icon")
+            
+            local iconPreview = dlg:CreateTexture(nil, "ARTWORK")
+            iconPreview:SetSize(32, 32)
+            iconPreview:SetPoint("TOPRIGHT", selLabel, "BOTTOMRIGHT", 0, -2)
+            iconPreview:SetTexCoord(0.08, 0.92, 0.08, 0.92)
+            dlg.IconPreview = iconPreview
+            
+            local iconBorder = dlg:CreateTexture(nil, "OVERLAY")
+            iconBorder:SetTexture("Interface\\Buttons\\UI-ActionButton-Border")
+            iconBorder:SetBlendMode("ADD")
+            iconBorder:SetSize(32, 32)
+            iconBorder:SetPoint("CENTER", iconPreview, "CENTER", 0, 0)
+            
+            -- Icon Picker Grid Header
+            local gridLabel = dlg:CreateFontString(nil, "OVERLAY", "GameFontNormalSmall")
+            gridLabel:SetPoint("TOPLEFT", input, "BOTTOMLEFT", 0, -12)
+            gridLabel:SetText("Choose an Icon:")
+            
+            -- Icon Scroll Frame
+            local scrollFrame = CreateFrame("ScrollFrame", "OnePanel_NewSetIconScroll", dlg, "UIPanelScrollFrameTemplate")
+            scrollFrame:SetPoint("TOPLEFT", gridLabel, "BOTTOMLEFT", 0, -6)
+            scrollFrame:SetPoint("BOTTOMRIGHT", dlg, "BOTTOMRIGHT", -32, 42)
+            
+            local gridContent = CreateFrame("Frame", "OnePanel_NewSetIconGridContent", scrollFrame)
+            gridContent:SetSize(300, 400)
+            scrollFrame:SetScrollChild(gridContent)
+            dlg.GridContent = gridContent
             
             local function PerformSave()
                 local setName = (input:GetText() or ""):match("^%s*(.-)%s*$")
@@ -1495,13 +1397,13 @@ local function CreateCharacterView(parentFrame)
             
             local saveBtn = CreateFrame("Button", "OnePanel_NewSetSaveBtn", dlg, "UIPanelButtonTemplate")
             saveBtn:SetSize(110, 22)
-            saveBtn:SetPoint("BOTTOMLEFT", dlg, "BOTTOMLEFT", 30, 16)
+            saveBtn:SetPoint("BOTTOMLEFT", dlg, "BOTTOMLEFT", 30, 12)
             dlg.SaveBtn = saveBtn
             saveBtn:SetScript("OnClick", PerformSave)
             
             local cancelBtn = CreateFrame("Button", "OnePanel_NewSetCancelBtn", dlg, "UIPanelButtonTemplate")
             cancelBtn:SetSize(110, 22)
-            cancelBtn:SetPoint("BOTTOMRIGHT", dlg, "BOTTOMRIGHT", -30, 16)
+            cancelBtn:SetPoint("BOTTOMRIGHT", dlg, "BOTTOMRIGHT", -30, 12)
             cancelBtn:SetText("Cancel")
             cancelBtn:SetScript("OnClick", function()
                 dlg:Hide()
@@ -1516,7 +1418,7 @@ local function CreateCharacterView(parentFrame)
         local dlg = _G["OnePanel_NewSetDialog"]
         dlg.existingSetID = existingSetID
         dlg.selectedIconID = defaultIconID or GetDefaultSetIcon()
-        dlg.IconTex:SetTexture(dlg.selectedIconID)
+        dlg.IconPreview:SetTexture(dlg.selectedIconID)
         dlg.Input:SetText(defaultName or "")
         dlg.Input:HighlightText()
         
@@ -1528,6 +1430,72 @@ local function CreateCharacterView(parentFrame)
             dlg.SaveBtn:SetText("Save Set")
         end
         
+        -- Render Embedded Icon Grid
+        local icons = GetAvailableIcons()
+        local content = dlg.GridContent
+        if not content.buttons then content.buttons = {} end
+        for _, btn in ipairs(content.buttons) do btn:Hide() end
+        
+        local btnSize = 34
+        local cols = 8
+        local spacing = 4
+        local startX = 2
+        local startY = -2
+        
+        for idx, iconID in ipairs(icons) do
+            local btn = content.buttons[idx]
+            if not btn then
+                btn = CreateFrame("Button", nil, content)
+                btn:SetSize(btnSize, btnSize)
+                
+                local tex = btn:CreateTexture(nil, "ARTWORK")
+                tex:SetAllPoints(btn)
+                tex:SetTexCoord(0.08, 0.92, 0.08, 0.92)
+                btn.Tex = tex
+                
+                local selBdr = btn:CreateTexture(nil, "OVERLAY")
+                selBdr:SetTexture("Interface\\Buttons\\UI-ActionButton-Border")
+                selBdr:SetBlendMode("ADD")
+                selBdr:SetAllPoints(btn)
+                selBdr:Hide()
+                btn.SelectedBorder = selBdr
+                
+                local hl = btn:CreateTexture(nil, "HIGHLIGHT")
+                hl:SetTexture("Interface\\Buttons\\ButtonHilight-Square")
+                hl:SetBlendMode("ADD")
+                hl:SetAllPoints(btn)
+                
+                content.buttons[idx] = btn
+            end
+            
+            local col = (idx - 1) % cols
+            local row = math.floor((idx - 1) / cols)
+            btn:ClearAllPoints()
+            btn:SetPoint("TOPLEFT", content, "TOPLEFT", startX + col * (btnSize + spacing), startY - row * (btnSize + spacing))
+            
+            btn.Tex:SetTexture(iconID)
+            if iconID == dlg.selectedIconID then
+                btn.SelectedBorder:Show()
+            else
+                btn.SelectedBorder:Hide()
+            end
+            
+            btn:SetScript("OnClick", function()
+                dlg.selectedIconID = iconID
+                dlg.IconPreview:SetTexture(iconID)
+                for _, b in ipairs(content.buttons) do
+                    if b.Tex:GetTexture() == iconID then
+                        b.SelectedBorder:Show()
+                    else
+                        b.SelectedBorder:Hide()
+                    end
+                end
+            end)
+            btn:Show()
+        end
+        
+        local totalRows = math.ceil(#icons / cols)
+        content:SetHeight(totalRows * (btnSize + spacing) + 12)
         dlg:Show()
     end
     
