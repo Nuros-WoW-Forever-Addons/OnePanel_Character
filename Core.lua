@@ -741,10 +741,22 @@ local function CreateCharacterView(parentFrame)
             btn:SetPoint("TOPLEFT", content, "TOPLEFT", col * (btnSize + spacing), -row * (btnSize + spacing))
             
             if entry.isUnequip then
-                btn.Icon:SetTexture(entry.texture or 136513)
+                btn.Icon:SetTexture(255351)
                 btn.Icon:SetDesaturated(false)
                 btn.Icon:SetVertexColor(1, 1, 1, 1)
                 btn.Border:Hide()
+                
+                if not btn.GreenArrow then
+                    local arrow = btn:CreateTexture(nil, "OVERLAY", nil, 2)
+                    arrow:SetSize(20, 22)
+                    arrow:SetPoint("CENTER", btn, "CENTER", 0, 0)
+                    local setArrowAtlas = pcall(function() arrow:SetAtlas("bags-greenarrow", true) end)
+                    if not setArrowAtlas or not arrow:GetTexture() then
+                        arrow:SetTexture(969828)
+                    end
+                    btn.GreenArrow = arrow
+                end
+                btn.GreenArrow:Show()
                 
                 btn:SetScript("OnEnter", function(self)
                     GameTooltip:SetOwner(self, "ANCHOR_RIGHT")
@@ -762,6 +774,7 @@ local function CreateCharacterView(parentFrame)
                     end
                 end)
             else
+                if btn.GreenArrow then btn.GreenArrow:Hide() end
                 btn.Icon:SetTexture(entry.texture)
                 btn.Icon:SetDesaturated(false)
                 btn.Icon:SetVertexColor(1, 1, 1, 1)
