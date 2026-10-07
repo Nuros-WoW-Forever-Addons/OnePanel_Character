@@ -190,31 +190,29 @@ local function CreateCharacterView(parentFrame)
     leftArea:SetPoint("BOTTOMLEFT", container, "BOTTOMLEFT", 0, 0)
     leftArea:SetWidth(338)
     
-    -- Dedicated Background Art Container bounded inside leftArea frame insets
+    -- Dedicated Background Container bounded inside leftArea frame insets
     local bgContainer = CreateFrame("Frame", "OnePanel_CharacterBgContainer", leftArea)
     bgContainer:SetClipsChildren(true)
-    bgContainer:SetPoint("TOPLEFT", leftArea, "TOPLEFT", 5, -5)
-    bgContainer:SetPoint("BOTTOMRIGHT", leftArea, "BOTTOMRIGHT", 3, -13)
+    bgContainer:SetPoint("TOPLEFT", leftArea, "TOPLEFT", 10, -12)
+    bgContainer:SetPoint("BOTTOMRIGHT", leftArea, "BOTTOMRIGHT", -4, 12)
+    
+    if Utils and Utils.FrameHelper then
+        Utils.FrameHelper:ApplyBackdrop(bgContainer,
+            "Interface\\FrameGeneral\\UI-Background-Marble",
+            "Interface\\Tooltips\\UI-Tooltip-Border",
+            16, 16, { left = 4, right = 4, top = 4, bottom = 4 }
+        )
+    end
     
     local RefreshPlayerModel = nil
     
-    -- Classic WoW Marble Background Texture
-    local bgTex = bgContainer:CreateTexture(nil, "BACKGROUND", nil, -8)
-    bgTex:SetAllPoints(bgContainer)
-    bgTex:SetTexture("Interface\\FrameGeneral\\UI-Background-Marble")
-    bgTex:SetHorizTile(true)
-    bgTex:SetVertTile(true)
-    
-    local bgOverlay = bgContainer:CreateTexture(nil, "BACKGROUND", nil, -7)
-    bgOverlay:SetAllPoints(bgContainer)
-    bgOverlay:SetAlpha(0.25)
-    pcall(function() bgOverlay:SetAtlas("UI-Character-Info-RaceBG-Overlay", false) end)
-    
     local function UpdateRaceBackgroundArt()
-        if bgTex then
-            bgTex:SetTexture("Interface\\FrameGeneral\\UI-Background-Marble")
-            bgTex:SetHorizTile(true)
-            bgTex:SetVertTile(true)
+        if Utils and Utils.FrameHelper then
+            Utils.FrameHelper:ApplyBackdrop(bgContainer,
+                "Interface\\FrameGeneral\\UI-Background-Marble",
+                "Interface\\Tooltips\\UI-Tooltip-Border",
+                16, 16, { left = 4, right = 4, top = 4, bottom = 4 }
+            )
         end
         return true
     end
