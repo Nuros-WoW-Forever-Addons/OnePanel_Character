@@ -803,24 +803,39 @@ local function CreateCharacterView(parentFrame)
             arrow:SetPoint("BOTTOM", btn, "TOP", 0, -2)
         end
         
-        local arrowTex = arrow:CreateTexture(nil, "ARTWORK")
-        arrowTex:SetAllPoints(arrow)
-        local setAtlas1 = pcall(function() arrowTex:SetAtlas("Char-Equipment-FlyoutChevron", true) end)
-        if not setAtlas1 or not arrowTex:GetTexture() then
-            local setAtlas2 = pcall(function() arrowTex:SetAtlas("equipmentmanager-icon-outfitbutton", true) end)
-            if not setAtlas2 or not arrowTex:GetTexture() then
-                arrowTex:SetTexture("Interface\\Buttons\\UI-SpellbookSearch-DrillDown")
-                if isRightSlot then
-                    arrowTex:SetTexCoord(1, 0, 0, 1)
-                end
-            end
+        local normalTex = arrow:CreateTexture(nil, "ARTWORK")
+        normalTex:SetAllPoints(arrow)
+        local setAtlasNorm = pcall(function() normalTex:SetAtlas("UI-Character-Info-Button-PullSide", true) end)
+        if not setAtlasNorm or not normalTex:GetTexture() then
+            normalTex:SetTexture(8175457)
         end
-        arrow.Icon = arrowTex
+        if isRightSlot and normalTex.SetTexCoord then
+            normalTex:SetTexCoord(1, 0, 0, 1)
+        end
+        arrow:SetNormalTexture(normalTex)
         
-        local arrowHl = arrow:CreateTexture(nil, "HIGHLIGHT")
-        arrowHl:SetTexture("Interface\\Buttons\\UI-Common-MouseHilight")
-        arrowHl:SetBlendMode("ADD")
-        arrowHl:SetAllPoints(arrow)
+        local pushedTex = arrow:CreateTexture(nil, "ARTWORK")
+        pushedTex:SetAllPoints(arrow)
+        local setAtlasPushed = pcall(function() pushedTex:SetAtlas("UI-Character-Info-Button-PullSide-Pressed", true) end)
+        if not setAtlasPushed or not pushedTex:GetTexture() then
+            pushedTex:SetTexture(8175457)
+        end
+        if isRightSlot and pushedTex.SetTexCoord then
+            pushedTex:SetTexCoord(1, 0, 0, 1)
+        end
+        arrow:SetPushedTexture(pushedTex)
+        
+        local highlightTex = arrow:CreateTexture(nil, "HIGHLIGHT")
+        highlightTex:SetAllPoints(arrow)
+        local setAtlasHl = pcall(function() highlightTex:SetAtlas("UI-Character-Info-Button-PullSide", true) end)
+        if not setAtlasHl or not highlightTex:GetTexture() then
+            highlightTex:SetTexture(8175457)
+        end
+        if isRightSlot and highlightTex.SetTexCoord then
+            highlightTex:SetTexCoord(1, 0, 0, 1)
+        end
+        highlightTex:SetBlendMode("ADD")
+        arrow:SetHighlightTexture(highlightTex)
         
         arrow:SetScript("OnEnter", function(self)
             GameTooltip:SetOwner(self, "ANCHOR_RIGHT")
