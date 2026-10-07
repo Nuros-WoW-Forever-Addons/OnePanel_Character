@@ -756,17 +756,55 @@ local function CreateCharacterView(parentFrame)
             PickupInventoryItem(self.slotId)
         end)
         
-        btn:SetScript("OnEnter", function(self)
+        -- Popout Flyout Arrow Button (Appears next to slot when Equipment Manager sub-tab is active)
+        local arrow = CreateFrame("Button", nil, btn)
+        arrow:SetSize(16, 16)
+        arrow:SetFrameLevel(110)
+        
+        local isLeftSlot = false
+        for _, s in ipairs(EquipmentSlotsLeft) do
+            if s.id == slotInfo.id then isLeftSlot = true break end
+        end
+        local isRightSlot = false
+        for _, s in ipairs(EquipmentSlotsRight) do
+            if s.id == slotInfo.id then isRightSlot = true break end
+        end
+        
+        if isLeftSlot then
+            arrow:SetPoint("RIGHT", btn, "LEFT", -2, 0)
+        elseif isRightSlot then
+            arrow:SetPoint("LEFT", btn, "RIGHT", 2, 0)
+        else
+            arrow:SetPoint("TOP", btn, "BOTTOM", 0, -2)
+        end
+        
+        local arrowTex = arrow:CreateTexture(nil, "ARTWORK")
+        arrowTex:SetAllPoints(arrow)
+        local setArrow = pcall(function() arrowTex:SetAtlas("equipmentmanager-icon-outfitbutton", true) end)
+        if not setArrow or not arrowTex:GetTexture() then
+            arrowTex:SetTexture("Interface\\PaperDollInfoFrame\\UI-PaperDoll-Slot-FlyoutButton")
+        end
+        arrow.Icon = arrowTex
+        
+        local arrowHl = arrow:CreateTexture(nil, "HIGHLIGHT")
+        arrowHl:SetTexture("Interface\\Buttons\\UI-Common-MouseHilight")
+        arrowHl:SetBlendMode("ADD")
+        arrowHl:SetAllPoints(arrow)
+        
+        arrow:SetScript("OnEnter", function(self)
             GameTooltip:SetOwner(self, "ANCHOR_RIGHT")
-            local hasItem = GameTooltip:SetInventoryItem("player", self.slotId)
-            if not hasItem then
-                GameTooltip:SetText(slotInfo.name, 1, 1, 1)
-            end
-            GameTooltip:AddLine("<Click to choose item from bags>", 0.4, 0.8, 1.0)
+            GameTooltip:SetText("Choose item for " .. slotInfo.name, 1, 1, 1)
             GameTooltip:Show()
         end)
-        btn:SetScript("OnLeave", function() GameTooltip_Hide() end)
+        arrow:SetScript("OnLeave", function() GameTooltip_Hide() end)
         
+        arrow:SetScript("OnClick", function()
+            ShowEquipmentSlotFlyout(btn, slotInfo)
+        end)
+        
+        arrow:Hide()
+        btn.FlyoutArrow = arrow
+
         return btn
     end
     
@@ -1548,6 +1586,18 @@ local function CreateCharacterView(parentFrame)
                 if btn.Icon then btn.Icon:SetVertexColor(0.6, 0.6, 0.6, 1) end
             end
         end
+
+        local showFlyout = (targetTabId == "outfits")
+        if container.slots then
+            for _, slotBtn in pairs(container.slots) do
+                if slotBtn.FlyoutArrow then
+                    slotBtn.FlyoutArrow:SetShown(showFlyout)
+                end
+            end
+        end
+        if not showFlyout and _G["OnePanel_EquipmentFlyout"] then
+            _G["OnePanel_EquipmentFlyout"]:Hide()
+        end
     end
     
     -- Sub-Tab Bar Icons (Matches PaperDollSidebarTab: CheckButton 42x42 with UI-Character-Info-StatTab atlases)
@@ -1693,6 +1743,18 @@ local function CreateCharacterView(parentFrame)
         end
         if _G["OnePanel_EquipmentFlyout"] then
             _G["OnePanel_EquipmentFlyout"]:Hide()
+        end
+        if container.slots then
+            for _, slotBtn in pairs(container.slots) do
+                if slotBtn.FlyoutArrow then
+                    slotBtn.FlyoutArrow:Hide()
+                end
+            end
+        end
+    end)
+    container:HookScript("OnShow", function()
+        if subPanel and subPanel.activeTab then
+            SwitchSubTab(subPanel.activeTab)
         end
     end)
     
