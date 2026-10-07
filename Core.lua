@@ -248,7 +248,7 @@ local function CreateCharacterView(parentFrame)
             if isBear then
                 baseCamScale = 1.50
                 basePosY = 0
-                basePosZ = -0.20
+                basePosZ = -0.22
             elseif isCat then
                 baseCamScale = 1.30
                 basePosY = 0
@@ -256,11 +256,13 @@ local function CreateCharacterView(parentFrame)
             else
                 baseCamScale = 1.50
                 basePosY = 0
-                basePosZ = -0.20
+                basePosZ = -0.22
             end
         end
         
         model.baseCamScale = baseCamScale
+        model.basePosY = basePosY
+        model.basePosZ = basePosZ
         model.camScale = baseCamScale
         model.targetCamScale = baseCamScale
         model.facing = 0
@@ -275,9 +277,6 @@ local function CreateCharacterView(parentFrame)
         end
         if model.SetPosition then
             pcall(function() model:SetPosition(0, basePosY, basePosZ) end)
-        end
-        if model.SetPortraitZoom then
-            pcall(function() model:SetPortraitZoom(0) end)
         end
     end
     
@@ -345,9 +344,10 @@ local function CreateCharacterView(parentFrame)
                 if self.SetCamDistanceScale then
                     pcall(function() self:SetCamDistanceScale(newScale) end)
                 end
-                if self.SetPortraitZoom then
-                    local pZoom = math.max(0, math.min(1, (base - newScale) / (base * 0.65)))
-                    pcall(function() self:SetPortraitZoom(pZoom) end)
+                local posY = self.basePosY or 0
+                local posZ = self.basePosZ or -0.08
+                if self.SetPosition then
+                    pcall(function() self:SetPosition(0, posY, posZ) end)
                 end
             end
         end
