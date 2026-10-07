@@ -248,7 +248,7 @@ local function CreateCharacterView(parentFrame)
             if isBear then
                 baseCamScale = 1.50
                 basePosY = 0
-                basePosZ = -0.24
+                basePosZ = -0.20
             elseif isCat then
                 baseCamScale = 1.30
                 basePosY = 0
@@ -256,7 +256,7 @@ local function CreateCharacterView(parentFrame)
             else
                 baseCamScale = 1.50
                 basePosY = 0
-                basePosZ = -0.24
+                basePosZ = -0.20
             end
         end
         
