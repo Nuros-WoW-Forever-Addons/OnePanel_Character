@@ -556,9 +556,8 @@ local function CreateCharacterView(parentFrame)
     local function ShowEquipmentSlotFlyout(anchorFrame, slotInfo)
         if not _G["OnePanel_EquipmentFlyout"] then
             local flyout = CreateFrame("Frame", "OnePanel_EquipmentFlyout", UIParent)
-            flyout:SetSize(230, 180)
             flyout:SetFrameStrata("DIALOG")
-            flyout:SetFrameLevel(600)
+            flyout:SetFrameLevel(1000)
             flyout:SetClampedToScreen(true)
             
             if Utils and Utils.FrameHelper then
@@ -569,145 +568,194 @@ local function CreateCharacterView(parentFrame)
                 )
             end
             
-            local title = flyout:CreateFontString(nil, "OVERLAY", "GameFontNormalSmall")
-            title:SetPoint("TOPLEFT", flyout, "TOPLEFT", 10, -8)
-            flyout.Title = title
-            
-            local closeBtn = CreateFrame("Button", nil, flyout, "UIPanelCloseButton")
-            closeBtn:SetSize(20, 20)
-            closeBtn:SetPoint("TOPRIGHT", flyout, "TOPRIGHT", -2, -4)
-            closeBtn:SetScript("OnClick", function() flyout:Hide() end)
-            
             local scrollFrame = CreateFrame("ScrollFrame", "OnePanel_EquipmentFlyoutScroll", flyout, "UIPanelScrollFrameTemplate")
-            scrollFrame:SetPoint("TOPLEFT", flyout, "TOPLEFT", 6, -26)
-            scrollFrame:SetPoint("BOTTOMRIGHT", flyout, "BOTTOMRIGHT", -26, 30)
+            scrollFrame:SetPoint("TOPLEFT", flyout, "TOPLEFT", 6, -6)
+            scrollFrame:SetPoint("BOTTOMRIGHT", flyout, "BOTTOMRIGHT", -24, 6)
             
             local content = CreateFrame("Frame", "OnePanel_EquipmentFlyoutContent", scrollFrame)
-            content:SetSize(190, 200)
+            content:SetSize(180, 180)
             scrollFrame:SetScrollChild(content)
             flyout.Content = content
-            
-            local unequipBtn = CreateFrame("Button", nil, flyout, "UIPanelButtonTemplate")
-            unequipBtn:SetSize(210, 20)
-            unequipBtn:SetPoint("BOTTOM", flyout, "BOTTOM", 0, 6)
-            unequipBtn:SetText("Unequip Slot")
-            flyout.UnequipBtn = unequipBtn
         end
         
         local flyout = _G["OnePanel_EquipmentFlyout"]
-        flyout.Title:SetText(slotInfo.name or "Select Item")
+        flyout.currentSlotId = slotInfo.id
         
+        -- Position flyout next to anchor frame
         flyout:ClearAllPoints()
         local x = anchorFrame:GetCenter() or 0
         local screenW = UIParent:GetWidth() or 1000
+        
         if x > (screenW / 2) then
             flyout:SetPoint("TOPRIGHT", anchorFrame, "TOPLEFT", -6, 0)
         else
             flyout:SetPoint("TOPLEFT", anchorFrame, "TOPRIGHT", 6, 0)
         end
         
-        local items = GetItemsForSlot(slotInfo.id)
+        local bagItems = GetItemsForSlot(slotInfo.id)
+        local currentTexture = GetInventoryItemTexture("player", slotInfo.id)
+        local hasEquipped = currentTexture ~= nil
+        
         local content = flyout.Content
+        if not content.buttons then content.buttons = {} end
+        for _, b in ipairs(content.buttons) do b:Hide() end
         
-        if not content.rows then content.rows = {} end
-        for _, r in ipairs(content.rows) do r:Hide() end
+        local flyoutButtons = {}
         
-        local yOffset = 0
-        if #items == 0 then
-            local emptyText = content.emptyText
-            if not emptyText then
-                emptyText = content:CreateFontString(nil, "OVERLAY", "GameFontHighlightSmall")
-                emptyText:SetPoint("TOP", content, "TOP", 0, -20)
-                emptyText:SetText("|cff888888No matching items in bags|r")
-                content.emptyText = emptyText
+        -- 1. If an item is currently equipped, the first item in the grid is the Unequip button
+        if hasEquipped then
+            table.insert(flyoutButtons, {
+                isUnequip = true,
+                name = "Unequip Item",
+                texture = currentTexture,
+            })
+        end
+        
+        -- 2. Add all compatible items from bags
+        for _, item in ipairs(bagItems) do
+            table.insert(flyoutButtons, item)
+        end
+        
+        if #flyoutButtons == 0 then
+            local emptyMsg = content.emptyMsg
+            if not emptyMsg then
+                emptyMsg = content:CreateFontString(nil, "OVERLAY", "GameFontHighlightSmall")
+                emptyMsg:SetPoint("CENTER", content, "CENTER", 0, 0)
+                emptyMsg:SetText("|cffaaaaaaNo items available|r")
+                content.emptyMsg = emptyMsg
             end
-            emptyText:Show()
-            content:SetHeight(60)
-            flyout:SetHeight(120)
-        else
-            if content.emptyText then content.emptyText:Hide() end
-            for idx, item in ipairs(items) do
-                local row = content.rows[idx]
-                if not row then
-                    row = CreateFrame("Button", nil, content)
-                    row:SetSize(190, 32)
-                    
-                    local icon = row:CreateTexture(nil, "ARTWORK")
-                    icon:SetSize(28, 28)
-                    icon:SetPoint("LEFT", row, "LEFT", 2, 0)
-                    icon:SetTexCoord(0.08, 0.92, 0.08, 0.92)
-                    row.Icon = icon
-                    
-                    local nameText = row:CreateFontString(nil, "OVERLAY", "GameFontHighlightSmall")
-                    nameText:SetPoint("TOPLEFT", icon, "TOPRIGHT", 6, -2)
-                    nameText:SetWidth(110)
-                    nameText:SetJustifyH("LEFT")
-                    row.NameText = nameText
-                    
-                    local ilvlText = row:CreateFontString(nil, "OVERLAY", "GameFontDisableSmall")
-                    ilvlText:SetPoint("TOPLEFT", nameText, "BOTTOMLEFT", 0, -2)
-                    ilvlText:SetWidth(110)
-                    ilvlText:SetJustifyH("LEFT")
-                    row.IlvlText = ilvlText
-                    
-                    local hl = row:CreateTexture(nil, "HIGHLIGHT")
-                    hl:SetTexture("Interface\\Buttons\\UI-Common-MouseHilight")
-                    hl:SetBlendMode("ADD")
-                    hl:SetAllPoints(row)
-                    
-                    content.rows[idx] = row
-                end
+            emptyMsg:Show()
+            flyout:SetSize(150, 60)
+            content:SetSize(130, 48)
+            flyout:Show()
+            return
+        elseif content.emptyMsg then
+            content.emptyMsg:Hide()
+        end
+        
+        local btnSize = 37
+        local cols = math.min(#flyoutButtons, 4) -- Up to 4 columns per row
+        local rows = math.ceil(#flyoutButtons / cols)
+        local spacing = 4
+        
+        for idx, entry in ipairs(flyoutButtons) do
+            local btn = content.buttons[idx]
+            if not btn then
+                btn = CreateFrame("Button", nil, content)
+                btn:SetSize(btnSize, btnSize)
                 
-                row:ClearAllPoints()
-                row:SetPoint("TOPLEFT", content, "TOPLEFT", 0, yOffset)
+                local bg = btn:CreateTexture(nil, "BACKGROUND")
+                bg:SetTexture("Interface\\Buttons\\UI-Quickslot2")
+                bg:SetSize(58, 58)
+                bg:SetPoint("CENTER", btn, "CENTER", 0, 0)
+                btn.BG = bg
                 
-                row.Icon:SetTexture(item.texture)
-                local r, g, b = 1, 1, 1
-                if GetItemQualityColor then
-                    r, g, b = GetItemQualityColor(item.quality)
-                end
-                row.NameText:SetText(string.format("|cff%02x%02x%02x%s|r", r*255, g*255, b*255, item.name))
-                row.IlvlText:SetText(string.format("iLvl %d", item.itemLevel))
+                local icon = btn:CreateTexture(nil, "ARTWORK")
+                icon:SetSize(33, 33)
+                icon:SetPoint("CENTER", btn, "CENTER", 0, 0)
+                icon:SetTexCoord(0.08, 0.92, 0.08, 0.92)
+                btn.Icon = icon
                 
-                row:SetScript("OnEnter", function(self)
+                local border = btn:CreateTexture(nil, "OVERLAY")
+                border:SetSize(33, 33)
+                border:SetPoint("CENTER", btn, "CENTER", 0, 0)
+                border:SetTexture("Interface\\Buttons\\UI-ActionButton-Border")
+                border:SetBlendMode("ADD")
+                btn.Border = border
+                
+                local unequipCross = btn:CreateTexture(nil, "OVERLAY", nil, 2)
+                unequipCross:SetTexture("Interface\\Buttons\\UI-Group-Loot-Pass-Up")
+                unequipCross:SetSize(33, 33)
+                unequipCross:SetPoint("CENTER", btn, "CENTER", 0, 0)
+                btn.UnequipCross = unequipCross
+                
+                local hl = btn:CreateTexture(nil, "HIGHLIGHT")
+                hl:SetTexture("Interface\\Buttons\\ButtonHilight-Square")
+                hl:SetBlendMode("ADD")
+                hl:SetAllPoints(icon)
+                
+                content.buttons[idx] = btn
+            end
+            
+            local col = (idx - 1) % cols
+            local row = math.floor((idx - 1) / cols)
+            
+            btn:ClearAllPoints()
+            btn:SetPoint("TOPLEFT", content, "TOPLEFT", col * (btnSize + spacing), -row * (btnSize + spacing))
+            
+            if entry.isUnequip then
+                btn.Icon:SetTexture(entry.texture or slotInfo.icon)
+                btn.Icon:SetDesaturated(true)
+                btn.Icon:SetVertexColor(0.6, 0.6, 0.6, 0.7)
+                btn.UnequipCross:Show()
+                btn.Border:Hide()
+                
+                btn:SetScript("OnEnter", function(self)
                     GameTooltip:SetOwner(self, "ANCHOR_RIGHT")
-                    GameTooltip:SetHyperlink(item.link)
+                    GameTooltip:SetText("Unequip Slot", 1, 0.3, 0.3)
+                    GameTooltip:AddLine("Click to remove equipped item.", 0.8, 0.8, 0.8)
                     GameTooltip:Show()
                 end)
-                row:SetScript("OnLeave", function() GameTooltip_Hide() end)
+                btn:SetScript("OnLeave", function() GameTooltip_Hide() end)
                 
-                row:SetScript("OnClick", function()
-                    if C_Container and C_Container.UseContainerItem then
-                        C_Container.UseContainerItem(item.bag, item.slot)
-                    elseif UseContainerItem then
-                        UseContainerItem(item.bag, item.slot)
+                btn:SetScript("OnClick", function()
+                    if GetInventoryItemTexture("player", slotInfo.id) then
+                        PickupInventoryItem(slotInfo.id)
+                        if CursorHasItem() then
+                            local autoEquip = _G.AutoEquipCursorItem or _G.PutItemInBackpack
+                            if type(autoEquip) == "function" then
+                                autoEquip()
+                            else
+                                pcall(PickupContainerItem, 0, 0)
+                            end
+                        end
                     end
                     flyout:Hide()
                 end)
+            else
+                btn.UnequipCross:Hide()
+                btn.Icon:SetTexture(entry.texture)
+                btn.Icon:SetDesaturated(false)
+                btn.Icon:SetVertexColor(1, 1, 1, 1)
                 
-                row:Show()
-                yOffset = yOffset - 34
+                local r, g, b = 1, 1, 1
+                if entry.quality and GetItemQualityColor then
+                    r, g, b = GetItemQualityColor(entry.quality)
+                end
+                if entry.quality and entry.quality > 1 then
+                    btn.Border:SetVertexColor(r, g, b, 1)
+                    btn.Border:Show()
+                else
+                    btn.Border:Hide()
+                end
+                
+                btn:SetScript("OnEnter", function(self)
+                    GameTooltip:SetOwner(self, "ANCHOR_RIGHT")
+                    GameTooltip:SetHyperlink(entry.link)
+                    GameTooltip:Show()
+                end)
+                btn:SetScript("OnLeave", function() GameTooltip_Hide() end)
+                
+                btn:SetScript("OnClick", function()
+                    if C_Container and C_Container.UseContainerItem then
+                        C_Container.UseContainerItem(entry.bag, entry.slot)
+                    elseif UseContainerItem then
+                        UseContainerItem(entry.bag, entry.slot)
+                    end
+                    flyout:Hide()
+                end)
             end
             
-            content:SetHeight(math.abs(yOffset) + 10)
-            flyout:SetHeight(math.min(320, math.max(120, math.abs(yOffset) + 65)))
+            btn:Show()
         end
         
-        flyout.UnequipBtn:SetScript("OnClick", function()
-            if GetInventoryItemTexture("player", slotInfo.id) then
-                PickupInventoryItem(slotInfo.id)
-                if CursorHasItem() then
-                    local autoEquip = _G.AutoEquipCursorItem or _G.PutItemInBackpack
-                    if type(autoEquip) == "function" then
-                        autoEquip()
-                    else
-                        pcall(PickupContainerItem, 0, 0)
-                    end
-                end
-            end
-            flyout:Hide()
-        end)
+        local gridW = cols * (btnSize + spacing) - spacing + 12
+        local gridH = rows * (btnSize + spacing) - spacing + 12
+        local maxH = 210
+        local actualH = math.min(maxH, gridH)
         
+        content:SetSize(cols * (btnSize + spacing), rows * (btnSize + spacing))
+        flyout:SetSize(gridW + 28, actualH + 16)
         flyout:Show()
     end
 
@@ -761,7 +809,12 @@ local function CreateCharacterView(parentFrame)
             if CursorHasItem() then
                 PickupInventoryItem(self.slotId)
             else
-                ShowEquipmentSlotFlyout(self, slotInfo)
+                local flyout = _G["OnePanel_EquipmentFlyout"]
+                if flyout and flyout:IsShown() and flyout.currentSlotId == slotInfo.id then
+                    flyout:Hide()
+                else
+                    ShowEquipmentSlotFlyout(self, slotInfo)
+                end
             end
             
             if container and container.UpdateEquipment then
@@ -791,6 +844,7 @@ local function CreateCharacterView(parentFrame)
         for _, s in ipairs(EquipmentSlotsRight) do
             if s.id == slotInfo.id then isRightSlot = true break end
         end
+        local isBottomSlot = not isLeftSlot and not isRightSlot
         
         if isLeftSlot then
             arrow:SetSize(20, 43)
@@ -809,8 +863,12 @@ local function CreateCharacterView(parentFrame)
         if not setAtlasNorm or not normalTex:GetTexture() then
             normalTex:SetTexture(8175457)
         end
-        if isRightSlot and normalTex.SetTexCoord then
-            normalTex:SetTexCoord(1, 0, 0, 1)
+        if isLeftSlot and normalTex.SetTexCoord then
+            normalTex:SetTexCoord(1, 0, 0, 1) -- Chevron points RIGHT towards center/flyout
+        elseif isRightSlot and normalTex.SetTexCoord then
+            normalTex:SetTexCoord(0, 1, 0, 1) -- Chevron points LEFT towards center/flyout
+        elseif isBottomSlot and normalTex.SetRotation then
+            normalTex:SetRotation(math.pi / 2) -- Chevron points UP towards paperdoll model
         end
         arrow:SetNormalTexture(normalTex)
         
@@ -820,8 +878,12 @@ local function CreateCharacterView(parentFrame)
         if not setAtlasPushed or not pushedTex:GetTexture() then
             pushedTex:SetTexture(8175457)
         end
-        if isRightSlot and pushedTex.SetTexCoord then
+        if isLeftSlot and pushedTex.SetTexCoord then
             pushedTex:SetTexCoord(1, 0, 0, 1)
+        elseif isRightSlot and pushedTex.SetTexCoord then
+            pushedTex:SetTexCoord(0, 1, 0, 1)
+        elseif isBottomSlot and pushedTex.SetRotation then
+            pushedTex:SetRotation(math.pi / 2)
         end
         arrow:SetPushedTexture(pushedTex)
         
@@ -831,8 +893,12 @@ local function CreateCharacterView(parentFrame)
         if not setAtlasHl or not highlightTex:GetTexture() then
             highlightTex:SetTexture(8175457)
         end
-        if isRightSlot and highlightTex.SetTexCoord then
+        if isLeftSlot and highlightTex.SetTexCoord then
             highlightTex:SetTexCoord(1, 0, 0, 1)
+        elseif isRightSlot and highlightTex.SetTexCoord then
+            highlightTex:SetTexCoord(0, 1, 0, 1)
+        elseif isBottomSlot and highlightTex.SetRotation then
+            highlightTex:SetRotation(math.pi / 2)
         end
         highlightTex:SetBlendMode("ADD")
         arrow:SetHighlightTexture(highlightTex)
@@ -845,7 +911,12 @@ local function CreateCharacterView(parentFrame)
         arrow:SetScript("OnLeave", function() GameTooltip_Hide() end)
         
         arrow:SetScript("OnClick", function()
-            ShowEquipmentSlotFlyout(btn, slotInfo)
+            local flyout = _G["OnePanel_EquipmentFlyout"]
+            if flyout and flyout:IsShown() and flyout.currentSlotId == slotInfo.id then
+                flyout:Hide()
+            else
+                ShowEquipmentSlotFlyout(btn, slotInfo)
+            end
         end)
         
         arrow:Hide()
