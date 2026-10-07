@@ -896,39 +896,55 @@ local function CreateCharacterView(parentFrame)
                 rowBg:SetAllPoints(row)
                 row.Bg = rowBg
                 
-                -- Set Icon
-                local icon = row:CreateTexture(nil, "ARTWORK")
-                icon:SetSize(32, 32)
-                icon:SetPoint("LEFT", row, "LEFT", 4, 0)
+                -- Set Icon Button (Interactive)
+                local iconBtn = CreateFrame("Button", nil, row)
+                iconBtn:SetSize(32, 32)
+                iconBtn:SetPoint("LEFT", row, "LEFT", 4, 0)
+                
+                local icon = iconBtn:CreateTexture(nil, "ARTWORK")
+                icon:SetAllPoints(iconBtn)
                 icon:SetTexCoord(0.08, 0.92, 0.08, 0.92)
                 row.Icon = icon
                 
+                local iconHl = iconBtn:CreateTexture(nil, "HIGHLIGHT")
+                iconHl:SetTexture("Interface\\Buttons\\ButtonHilight-Square")
+                iconHl:SetBlendMode("ADD")
+                iconHl:SetAllPoints(iconBtn)
+                row.IconBtn = iconBtn
+                
                 -- Set Name
                 local nameText = row:CreateFontString(nil, "OVERLAY", "GameFontHighlight")
-                nameText:SetPoint("TOPLEFT", icon, "TOPRIGHT", 6, 2)
-                nameText:SetWidth(80)
+                nameText:SetPoint("TOPLEFT", iconBtn, "TOPRIGHT", 6, 2)
+                nameText:SetWidth(76)
                 nameText:SetJustifyH("LEFT")
                 row.NameText = nameText
                 
                 -- Status / Equipped Text
                 local statusText = row:CreateFontString(nil, "OVERLAY", "GameFontNormalSmall")
                 statusText:SetPoint("TOPLEFT", nameText, "BOTTOMLEFT", 0, -2)
-                statusText:SetWidth(80)
+                statusText:SetWidth(76)
                 statusText:SetJustifyH("LEFT")
                 row.StatusText = statusText
                 
                 -- Equip Button
                 local equipBtn = CreateFrame("Button", nil, row, "UIPanelButtonTemplate")
-                equipBtn:SetSize(48, 18)
-                equipBtn:SetPoint("RIGHT", row, "RIGHT", -4, 8)
+                equipBtn:SetSize(50, 18)
+                equipBtn:SetPoint("RIGHT", row, "RIGHT", -4, 9)
                 equipBtn:SetText("Equip")
                 row.EquipBtn = equipBtn
                 
+                -- Edit Button
+                local editBtn = CreateFrame("Button", nil, row, "UIPanelButtonTemplate")
+                editBtn:SetSize(25, 16)
+                editBtn:SetPoint("RIGHT", row, "RIGHT", -29, -11)
+                editBtn:SetText("Edit")
+                row.EditBtn = editBtn
+                
                 -- Delete Button
                 local deleteBtn = CreateFrame("Button", nil, row, "UIPanelButtonTemplate")
-                deleteBtn:SetSize(48, 16)
+                deleteBtn:SetSize(24, 16)
                 deleteBtn:SetPoint("RIGHT", row, "RIGHT", -4, -11)
-                deleteBtn:SetText("Delete")
+                deleteBtn:SetText("Del")
                 row.DeleteBtn = deleteBtn
                 
                 outfitsContent.rows[idx] = row
@@ -960,6 +976,21 @@ local function CreateCharacterView(parentFrame)
                 end
                 row.EquipBtn:Enable()
             end
+            
+            row.IconBtn:SetScript("OnEnter", function(self)
+                GameTooltip:SetOwner(self, "ANCHOR_RIGHT")
+                GameTooltip:SetText("Click to edit icon & name", 1, 1, 1)
+                GameTooltip:Show()
+            end)
+            row.IconBtn:SetScript("OnLeave", function() GameTooltip_Hide() end)
+            
+            row.IconBtn:SetScript("OnClick", function()
+                ShowNewSetDialog(name, iconFileID, setID)
+            end)
+            
+            row.EditBtn:SetScript("OnClick", function()
+                ShowNewSetDialog(name, iconFileID, setID)
+            end)
             
             row.EquipBtn:SetScript("OnClick", function()
                 if C_EquipmentSet and C_EquipmentSet.UseEquipmentSet then
@@ -1021,11 +1052,141 @@ local function CreateCharacterView(parentFrame)
         return nil
     end
 
-    -- New Equipment Set Modal Dialog
-    local function ShowNewSetDialog(defaultName)
+    local cachedIconList = nil
+    local function GetAvailableIcons()
+        if cachedIconList then return cachedIconList end
+        cachedIconList = {}
+        local seen = {}
+        
+        local prioritySlots = { 16, 17, 18, 1, 3, 5, 7, 10, 6, 8, 2, 15, 4, 19, 9, 11, 12, 13, 14 }
+        for _, slot in ipairs(prioritySlots) do
+            local tex = GetInventoryItemTexture("player", slot)
+            if tex and not seen[tex] then
+                seen[tex] = true
+                table.insert(cachedIconList, tex)
+            end
+        end
+        
+        local temp = {}
+        if GetMacroIcons then pcall(GetMacroIcons, temp) end
+        if GetMacroItemIcons then pcall(GetMacroItemIcons, temp) end
+        
+        for _, id in ipairs(temp) do
+            if not seen[id] then
+                seen[id] = true
+                table.insert(cachedIconList, id)
+                if #cachedIconList >= 350 then break end
+            end
+        end
+        
+        if #cachedIconList == 0 then
+            cachedIconList = { 134400, 132089, 132090, 132091, 132092, 132093 }
+        end
+        return cachedIconList
+    end
+
+    local function ShowIconPickerDialog(onSelectCallback)
+        if not _G["OnePanel_IconPickerDialog"] then
+            local picker = CreateFrame("Frame", "OnePanel_IconPickerDialog", UIParent)
+            picker:SetSize(340, 320)
+            picker:SetPoint("CENTER", UIParent, "CENTER", 0, 30)
+            picker:SetFrameStrata("DIALOG")
+            picker:SetFrameLevel(1100)
+            picker:SetMovable(true)
+            picker:EnableMouse(true)
+            picker:RegisterForDrag("LeftButton")
+            picker:SetScript("OnDragStart", picker.StartMoving)
+            picker:SetScript("OnDragStop", picker.StopMovingOrSizing)
+            
+            if Utils and Utils.FrameHelper then
+                Utils.FrameHelper:ApplyBackdrop(picker,
+                    "Interface\\FrameGeneral\\UI-Background-Marble",
+                    "Interface\\Tooltips\\UI-Tooltip-Border",
+                    16, 16, { left = 4, right = 4, top = 4, bottom = 4 }
+                )
+            end
+            
+            local titleBg = picker:CreateTexture(nil, "ARTWORK")
+            titleBg:SetSize(332, 24)
+            titleBg:SetPoint("TOP", picker, "TOP", 0, -4)
+            titleBg:SetColorTexture(0.1, 0.1, 0.1, 0.6)
+            
+            local pickerTitle = picker:CreateFontString(nil, "OVERLAY", "GameFontHighlight")
+            pickerTitle:SetPoint("CENTER", titleBg, "CENTER", 0, 0)
+            pickerTitle:SetText("Select Equipment Set Icon")
+            
+            local closeBtn = CreateFrame("Button", nil, picker, "UIPanelCloseButton")
+            closeBtn:SetPoint("TOPRIGHT", picker, "TOPRIGHT", -2, -2)
+            
+            local scrollFrame = CreateFrame("ScrollFrame", "OnePanel_IconPickerScroll", picker, "UIPanelScrollFrameTemplate")
+            scrollFrame:SetPoint("TOPLEFT", picker, "TOPLEFT", 12, -34)
+            scrollFrame:SetPoint("BOTTOMRIGHT", picker, "BOTTOMRIGHT", -32, 12)
+            
+            local content = CreateFrame("Frame", "OnePanel_IconPickerContent", scrollFrame)
+            content:SetSize(276, 400)
+            scrollFrame:SetScrollChild(content)
+            picker.Content = content
+        end
+        
+        local picker = _G["OnePanel_IconPickerDialog"]
+        picker.onSelectCallback = onSelectCallback
+        
+        local icons = GetAvailableIcons()
+        local content = picker.Content
+        
+        if not content.buttons then content.buttons = {} end
+        for _, btn in ipairs(content.buttons) do btn:Hide() end
+        
+        local btnSize = 34
+        local cols = 7
+        local spacing = 4
+        local startX = 4
+        local startY = -4
+        
+        for idx, iconID in ipairs(icons) do
+            local btn = content.buttons[idx]
+            if not btn then
+                btn = CreateFrame("Button", nil, content)
+                btn:SetSize(btnSize, btnSize)
+                
+                local tex = btn:CreateTexture(nil, "ARTWORK")
+                tex:SetAllPoints(btn)
+                tex:SetTexCoord(0.08, 0.92, 0.08, 0.92)
+                btn.Tex = tex
+                
+                local hl = btn:CreateTexture(nil, "HIGHLIGHT")
+                hl:SetTexture("Interface\\Buttons\\ButtonHilight-Square")
+                hl:SetBlendMode("ADD")
+                hl:SetAllPoints(btn)
+                
+                content.buttons[idx] = btn
+            end
+            
+            local col = (idx - 1) % cols
+            local row = math.floor((idx - 1) / cols)
+            btn:ClearAllPoints()
+            btn:SetPoint("TOPLEFT", content, "TOPLEFT", startX + col * (btnSize + spacing), startY - row * (btnSize + spacing))
+            
+            btn.Tex:SetTexture(iconID)
+            btn:SetScript("OnClick", function()
+                if picker.onSelectCallback then
+                    picker.onSelectCallback(iconID)
+                end
+                picker:Hide()
+            end)
+            btn:Show()
+        end
+        
+        local totalRows = math.ceil(#icons / cols)
+        content:SetHeight(totalRows * (btnSize + spacing) + 12)
+        picker:Show()
+    end
+
+    -- New / Edit Equipment Set Modal Dialog
+    local function ShowNewSetDialog(defaultName, defaultIconID, existingSetID)
         if not _G["OnePanel_NewSetDialog"] then
             local dlg = CreateFrame("Frame", "OnePanel_NewSetDialog", UIParent)
-            dlg:SetSize(320, 150)
+            dlg:SetSize(340, 160)
             dlg:SetPoint("CENTER", UIParent, "CENTER", 0, 40)
             dlg:SetFrameStrata("DIALOG")
             dlg:SetFrameLevel(1000)
@@ -1044,36 +1205,75 @@ local function CreateCharacterView(parentFrame)
             end
             
             local titleBg = dlg:CreateTexture(nil, "ARTWORK")
-            titleBg:SetSize(312, 24)
+            titleBg:SetSize(332, 24)
             titleBg:SetPoint("TOP", dlg, "TOP", 0, -4)
             titleBg:SetColorTexture(0.1, 0.1, 0.1, 0.6)
             
             local dlgTitle = dlg:CreateFontString(nil, "OVERLAY", "GameFontHighlight")
             dlgTitle:SetPoint("CENTER", titleBg, "CENTER", 0, 0)
-            dlgTitle:SetText("Save Equipment Set")
+            dlg.Title = dlgTitle
+            
+            -- Interactive Icon Button
+            local iconBtn = CreateFrame("Button", "OnePanel_NewSetIconBtn", dlg)
+            iconBtn:SetSize(40, 40)
+            iconBtn:SetPoint("TOPLEFT", dlg, "TOPLEFT", 18, -42)
+            
+            local iconTex = iconBtn:CreateTexture(nil, "ARTWORK")
+            iconTex:SetAllPoints(iconBtn)
+            iconTex:SetTexCoord(0.08, 0.92, 0.08, 0.92)
+            dlg.IconTex = iconTex
+            
+            local iconBorder = iconBtn:CreateTexture(nil, "OVERLAY")
+            iconBorder:SetTexture("Interface\\Buttons\\UI-ActionButton-Border")
+            iconBorder:SetBlendMode("ADD")
+            iconBorder:SetAllPoints(iconBtn)
+            
+            local iconHl = iconBtn:CreateTexture(nil, "HIGHLIGHT")
+            iconHl:SetTexture("Interface\\Buttons\\ButtonHilight-Square")
+            iconHl:SetBlendMode("ADD")
+            iconHl:SetAllPoints(iconBtn)
+            
+            iconBtn:SetScript("OnEnter", function(self)
+                GameTooltip:SetOwner(self, "ANCHOR_TOP")
+                GameTooltip:SetText("Click to select set icon", 1, 1, 1)
+                GameTooltip:Show()
+            end)
+            iconBtn:SetScript("OnLeave", function() GameTooltip_Hide() end)
+            
+            iconBtn:SetScript("OnClick", function()
+                ShowIconPickerDialog(function(newIconID)
+                    dlg.selectedIconID = newIconID
+                    dlg.IconTex:SetTexture(newIconID)
+                end)
+            end)
             
             local inputLabel = dlg:CreateFontString(nil, "OVERLAY", "GameFontNormalSmall")
-            inputLabel:SetPoint("TOPLEFT", dlg, "TOPLEFT", 20, -38)
+            inputLabel:SetPoint("TOPLEFT", iconBtn, "TOPRIGHT", 12, 2)
             inputLabel:SetText("Set Name:")
             
             local input = CreateFrame("EditBox", "OnePanel_NewSetInput", dlg, "InputBoxTemplate")
-            input:SetSize(276, 22)
-            input:SetPoint("TOPLEFT", inputLabel, "BOTTOMLEFT", 0, -6)
+            input:SetSize(230, 22)
+            input:SetPoint("TOPLEFT", inputLabel, "BOTTOMLEFT", 0, -4)
             input:SetAutoFocus(true)
             dlg.Input = input
             
             local function PerformSave()
                 local setName = (input:GetText() or ""):match("^%s*(.-)%s*$")
                 if setName and setName ~= "" then
-                    if C_EquipmentSet then
-                        local iconID = GetDefaultSetIcon()
-                        local existingID = C_EquipmentSet.GetEquipmentSetID and C_EquipmentSet.GetEquipmentSetID(setName)
-                        if existingID and C_EquipmentSet.SaveEquipmentSet then
-                            C_EquipmentSet.SaveEquipmentSet(existingID)
-                        elseif C_EquipmentSet.CreateEquipmentSet then
+                    local iconID = dlg.selectedIconID or GetDefaultSetIcon()
+                    if dlg.existingSetID then
+                        if C_EquipmentSet and C_EquipmentSet.ModifyEquipmentSet then
+                            pcall(C_EquipmentSet.ModifyEquipmentSet, dlg.existingSetID, setName, iconID)
+                        end
+                        if C_EquipmentSet and C_EquipmentSet.SaveEquipmentSet then
+                            pcall(C_EquipmentSet.SaveEquipmentSet, dlg.existingSetID, iconID)
+                        end
+                    else
+                        if C_EquipmentSet and C_EquipmentSet.CreateEquipmentSet then
                             C_EquipmentSet.CreateEquipmentSet(setName, iconID)
                         end
                     end
+                    if outfitsView and outfitsView.Refresh then outfitsView:Refresh() end
                 end
                 dlg:Hide()
             end
@@ -1083,13 +1283,13 @@ local function CreateCharacterView(parentFrame)
             
             local saveBtn = CreateFrame("Button", "OnePanel_NewSetSaveBtn", dlg, "UIPanelButtonTemplate")
             saveBtn:SetSize(110, 22)
-            saveBtn:SetPoint("BOTTOMLEFT", dlg, "BOTTOMLEFT", 24, 16)
-            saveBtn:SetText("Save Set")
+            saveBtn:SetPoint("BOTTOMLEFT", dlg, "BOTTOMLEFT", 30, 16)
+            dlg.SaveBtn = saveBtn
             saveBtn:SetScript("OnClick", PerformSave)
             
             local cancelBtn = CreateFrame("Button", "OnePanel_NewSetCancelBtn", dlg, "UIPanelButtonTemplate")
             cancelBtn:SetSize(110, 22)
-            cancelBtn:SetPoint("BOTTOMRIGHT", dlg, "BOTTOMRIGHT", -24, 16)
+            cancelBtn:SetPoint("BOTTOMRIGHT", dlg, "BOTTOMRIGHT", -30, 16)
             cancelBtn:SetText("Cancel")
             cancelBtn:SetScript("OnClick", function()
                 dlg:Hide()
@@ -1102,8 +1302,20 @@ local function CreateCharacterView(parentFrame)
         end
         
         local dlg = _G["OnePanel_NewSetDialog"]
+        dlg.existingSetID = existingSetID
+        dlg.selectedIconID = defaultIconID or GetDefaultSetIcon()
+        dlg.IconTex:SetTexture(dlg.selectedIconID)
         dlg.Input:SetText(defaultName or "")
         dlg.Input:HighlightText()
+        
+        if existingSetID then
+            dlg.Title:SetText("Edit Equipment Set")
+            dlg.SaveBtn:SetText("Save Changes")
+        else
+            dlg.Title:SetText("Save Equipment Set")
+            dlg.SaveBtn:SetText("Save Set")
+        end
+        
         dlg:Show()
     end
     
