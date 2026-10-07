@@ -670,7 +670,7 @@ local function CreateCharacterView(parentFrame)
             table.insert(flyoutButtons, {
                 isUnequip = true,
                 name = "Place In Bags",
-                texture = "Interface\\PaperDoll\\UI-PaperDoll-Slot-Bag",
+                texture = 255351,
             })
         end
         
@@ -679,20 +679,16 @@ local function CreateCharacterView(parentFrame)
             table.insert(flyoutButtons, item)
         end
         
+        -- 3. If nothing is equipped and no items in bags, render a single 37x37 empty slot button
         if #flyoutButtons == 0 then
-            local emptyMsg = content.emptyMsg
-            if not emptyMsg then
-                emptyMsg = content:CreateFontString(nil, "OVERLAY", "GameFontHighlightSmall")
-                emptyMsg:SetPoint("CENTER", content, "CENTER", 0, 0)
-                emptyMsg:SetText("|cffaaaaaaNo items available|r")
-                content.emptyMsg = emptyMsg
-            end
-            emptyMsg:Show()
-            flyout:SetSize(150, 60)
-            content:SetSize(130, 48)
-            flyout:Show()
-            return
-        elseif content.emptyMsg then
+            table.insert(flyoutButtons, {
+                isEmptySlot = true,
+                name = "No item found",
+                texture = slotInfo.icon,
+            })
+        end
+        
+        if content.emptyMsg then
             content.emptyMsg:Hide()
         end
         
@@ -740,23 +736,29 @@ local function CreateCharacterView(parentFrame)
             btn:ClearAllPoints()
             btn:SetPoint("TOPLEFT", content, "TOPLEFT", col * (btnSize + spacing), -row * (btnSize + spacing))
             
-            if entry.isUnequip then
+            if btn.GreenArrow then btn.GreenArrow:Hide() end
+            
+            if entry.isEmptySlot then
+                btn.Icon:SetTexture(entry.texture)
+                btn.Icon:SetDesaturated(true)
+                btn.Icon:SetVertexColor(0.5, 0.5, 0.5, 0.6)
+                btn.Border:Hide()
+                
+                btn:SetScript("OnEnter", function(self)
+                    GameTooltip:SetOwner(self, "ANCHOR_RIGHT")
+                    GameTooltip:SetText("No item found", 1, 0.82, 0)
+                    GameTooltip:Show()
+                end)
+                btn:SetScript("OnLeave", function() GameTooltip_Hide() end)
+                
+                btn:SetScript("OnClick", function()
+                    flyout:Hide()
+                end)
+            elseif entry.isUnequip then
                 btn.Icon:SetTexture(255351)
                 btn.Icon:SetDesaturated(false)
                 btn.Icon:SetVertexColor(1, 1, 1, 1)
                 btn.Border:Hide()
-                
-                if not btn.GreenArrow then
-                    local arrow = btn:CreateTexture(nil, "OVERLAY", nil, 2)
-                    arrow:SetSize(20, 22)
-                    arrow:SetPoint("CENTER", btn, "CENTER", 0, 0)
-                    local setArrowAtlas = pcall(function() arrow:SetAtlas("bags-greenarrow", true) end)
-                    if not setArrowAtlas or not arrow:GetTexture() then
-                        arrow:SetTexture(969828)
-                    end
-                    btn.GreenArrow = arrow
-                end
-                btn.GreenArrow:Show()
                 
                 btn:SetScript("OnEnter", function(self)
                     GameTooltip:SetOwner(self, "ANCHOR_RIGHT")
@@ -774,7 +776,6 @@ local function CreateCharacterView(parentFrame)
                     end
                 end)
             else
-                if btn.GreenArrow then btn.GreenArrow:Hide() end
                 btn.Icon:SetTexture(entry.texture)
                 btn.Icon:SetDesaturated(false)
                 btn.Icon:SetVertexColor(1, 1, 1, 1)
