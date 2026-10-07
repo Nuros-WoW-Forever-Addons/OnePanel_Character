@@ -631,41 +631,65 @@ local function CreateCharacterView(parentFrame)
                 )
             end
             
-            local scrollFrame = CreateFrame("ScrollFrame", "OnePanel_EquipmentFlyoutScroll", flyout, "UIPanelScrollFrameTemplate")
-            scrollFrame:SetPoint("TOPLEFT", flyout, "TOPLEFT", 6, -6)
-            scrollFrame:SetPoint("BOTTOMRIGHT", flyout, "BOTTOMRIGHT", -24, 6)
+            -- Paging Navigation Bar at bottom (visible only when > 9 items)
+            local nav = CreateFrame("Frame", nil, flyout)
+            nav:SetSize(110, 18)
+            flyout.Nav = nav
             
-            local content = CreateFrame("Frame", "OnePanel_EquipmentFlyoutContent", scrollFrame)
-            content:SetSize(180, 180)
-            scrollFrame:SetScrollChild(content)
+            local prevBtn = CreateFrame("Button", nil, nav, "UIPanelScrollUpButtonTemplate")
+            prevBtn:SetSize(16, 16)
+            prevBtn:SetPoint("LEFT", nav, "LEFT", 2, 0)
+            nav.PrevBtn = prevBtn
+            
+            local nextBtn = CreateFrame("Button", nil, nav, "UIPanelScrollDownButtonTemplate")
+            nextBtn:SetSize(16, 16)
+            nextBtn:SetPoint("RIGHT", nav, "RIGHT", -2, 0)
+            nav.NextBtn = nextBtn
+            
+            local pageText = nav:CreateFontString(nil, "OVERLAY", "GameFontHighlightSmall")
+            pageText:SetPoint("CENTER", nav, "CENTER", 0, 0)
+            nav.PageText = pageText
+            
+            local content = CreateFrame("Frame", "OnePanel_EquipmentFlyoutContent", flyout)
             flyout.Content = content
         end
         
         local flyout = _G["OnePanel_EquipmentFlyout"]
-        flyout.currentSlotId = slotInfo.id
         
-        -- Position flyout next to anchor frame
+        -- Identify side direction: Left slots build RIGHT, Right slots build LEFT, Bottom slots build UP
+        local isLeftSlot = false
+        for _, s in ipairs(EquipmentSlotsLeft) do
+            if s.id == slotInfo.id then isLeftSlot = true break end
+        end
+        local isRightSlot = false
+        for _, s in ipairs(EquipmentSlotsRight) do
+            if s.id == slotInfo.id then isRightSlot = true break end
+        end
+        local isBottomSlot = not isLeftSlot and not isRightSlot
+        
+        -- Position flyout anchored to the slot's flyout arrow button (or slot frame)
+        local arrowBtn = anchorFrame.FlyoutArrow or anchorFrame
         flyout:ClearAllPoints()
-        local x = anchorFrame:GetCenter() or 0
-        local screenW = UIParent:GetWidth() or 1000
-        
-        if x > (screenW / 2) then
-            flyout:SetPoint("TOPRIGHT", anchorFrame, "TOPLEFT", -6, 0)
+        if isLeftSlot then
+            flyout:SetPoint("TOPLEFT", arrowBtn, "TOPRIGHT", 2, 0)
+        elseif isRightSlot then
+            flyout:SetPoint("TOPRIGHT", arrowBtn, "TOPLEFT", -2, 0)
         else
-            flyout:SetPoint("TOPLEFT", anchorFrame, "TOPRIGHT", 6, 0)
+            flyout:SetPoint("BOTTOMLEFT", arrowBtn, "TOPLEFT", 0, 2)
         end
         
         local bagItems = GetItemsForSlot(slotInfo.id)
         local currentTexture = GetInventoryItemTexture("player", slotInfo.id)
         local hasEquipped = currentTexture ~= nil
         
-        local content = flyout.Content
-        if not content.buttons then content.buttons = {} end
-        for _, b in ipairs(content.buttons) do b:Hide() end
-        
         local flyoutButtons = {}
         
-        -- 1. If an item is currently equipped, the first item in the grid is the Place In Bags unequip button
+        -- 1. Equippable bag items first
+        for _, item in ipairs(bagItems) do
+            table.insert(flyoutButtons, item)
+        end
+        
+        -- 2. If an item is currently equipped, append "Place In Bags" AFTER bag items
         if hasEquipped then
             table.insert(flyoutButtons, {
                 isUnequip = true,
@@ -674,12 +698,7 @@ local function CreateCharacterView(parentFrame)
             })
         end
         
-        -- 2. Add all compatible items from bags
-        for _, item in ipairs(bagItems) do
-            table.insert(flyoutButtons, item)
-        end
-        
-        -- 3. If nothing is equipped and no items in bags, render a single 37x37 empty slot button
+        -- 3. If nothing is equipped and no items in bags:
         if #flyoutButtons == 0 then
             table.insert(flyoutButtons, {
                 isEmptySlot = true,
@@ -688,17 +707,60 @@ local function CreateCharacterView(parentFrame)
             })
         end
         
-        if content.emptyMsg then
-            content.emptyMsg:Hide()
+        -- Pagination setup
+        local totalItems = #flyoutButtons
+        local itemsPerPage = 9
+        local maxPages = math.max(1, math.ceil(totalItems / itemsPerPage))
+        
+        if flyout.currentSlotId ~= slotInfo.id then
+            flyout.currentPage = 1
+            flyout.currentSlotId = slotInfo.id
         end
         
-        local btnSize = 37
-        local cols = math.min(#flyoutButtons, 4) -- Up to 4 columns per row
-        local rows = math.ceil(#flyoutButtons / cols)
-        local spacing = 4
+        local currentPage = math.max(1, math.min(maxPages, flyout.currentPage or 1))
+        flyout.currentPage = currentPage
         
-        for idx, entry in ipairs(flyoutButtons) do
-            local btn = content.buttons[idx]
+        local nav = flyout.Nav
+        if maxPages > 1 then
+            nav:Show()
+            nav.PageText:SetText(string.format("%d / %d", currentPage, maxPages))
+            nav.PrevBtn:SetEnabled(currentPage > 1)
+            nav.NextBtn:SetEnabled(currentPage < maxPages)
+            
+            nav.PrevBtn:SetScript("OnClick", function()
+                if flyout.currentPage > 1 then
+                    flyout.currentPage = flyout.currentPage - 1
+                    ShowEquipmentSlotFlyout(anchorFrame, slotInfo)
+                end
+            end)
+            nav.NextBtn:SetScript("OnClick", function()
+                if flyout.currentPage < maxPages then
+                    flyout.currentPage = flyout.currentPage + 1
+                    ShowEquipmentSlotFlyout(anchorFrame, slotInfo)
+                end
+            end)
+        else
+            nav:Hide()
+        end
+        
+        local content = flyout.Content
+        if not content.buttons then content.buttons = {} end
+        for _, b in ipairs(content.buttons) do b:Hide() end
+        
+        local startIndex = (currentPage - 1) * itemsPerPage + 1
+        local endIndex = math.min(totalItems, currentPage * itemsPerPage)
+        local pageItemCount = (endIndex - startIndex + 1)
+        
+        local btnSize = 37
+        local spacing = 4
+        local maxCols = 3
+        local cols = math.min(pageItemCount, maxCols)
+        local rows = math.ceil(pageItemCount / maxCols)
+        
+        local displayIdx = 1
+        for idx = startIndex, endIndex do
+            local entry = flyoutButtons[idx]
+            local btn = content.buttons[displayIdx]
             if not btn then
                 btn = CreateFrame("Button", nil, content)
                 btn:SetSize(btnSize, btnSize)
@@ -727,14 +789,23 @@ local function CreateCharacterView(parentFrame)
                 hl:SetBlendMode("ADD")
                 hl:SetAllPoints(icon)
                 
-                content.buttons[idx] = btn
+                content.buttons[displayIdx] = btn
             end
             
-            local col = (idx - 1) % cols
-            local row = math.floor((idx - 1) / cols)
+            local col = (displayIdx - 1) % maxCols
+            local row = math.floor((displayIdx - 1) / maxCols)
             
             btn:ClearAllPoints()
-            btn:SetPoint("TOPLEFT", content, "TOPLEFT", col * (btnSize + spacing), -row * (btnSize + spacing))
+            if isLeftSlot then
+                -- Builds out to the RIGHT
+                btn:SetPoint("TOPLEFT", content, "TOPLEFT", col * (btnSize + spacing), -row * (btnSize + spacing))
+            elseif isRightSlot then
+                -- Builds out to the LEFT
+                btn:SetPoint("TOPRIGHT", content, "TOPRIGHT", -col * (btnSize + spacing), -row * (btnSize + spacing))
+            else
+                -- Builds UP
+                btn:SetPoint("BOTTOMLEFT", content, "BOTTOMLEFT", col * (btnSize + spacing), row * (btnSize + spacing))
+            end
             
             if btn.GreenArrow then btn.GreenArrow:Hide() end
             
@@ -750,10 +821,7 @@ local function CreateCharacterView(parentFrame)
                     GameTooltip:Show()
                 end)
                 btn:SetScript("OnLeave", function() GameTooltip_Hide() end)
-                
-                btn:SetScript("OnClick", function()
-                    flyout:Hide()
-                end)
+                btn:SetScript("OnClick", function() flyout:Hide() end)
             elseif entry.isUnequip then
                 btn.Icon:SetTexture(255351)
                 btn.Icon:SetDesaturated(false)
@@ -767,7 +835,6 @@ local function CreateCharacterView(parentFrame)
                     GameTooltip:Show()
                 end)
                 btn:SetScript("OnLeave", function() GameTooltip_Hide() end)
-                
                 btn:SetScript("OnClick", function()
                     UnequipItemSlot(slotInfo.id)
                     flyout:Hide()
@@ -797,7 +864,6 @@ local function CreateCharacterView(parentFrame)
                     GameTooltip:Show()
                 end)
                 btn:SetScript("OnLeave", function() GameTooltip_Hide() end)
-                
                 btn:SetScript("OnClick", function()
                     if C_Container and C_Container.UseContainerItem then
                         C_Container.UseContainerItem(entry.bag, entry.slot)
@@ -809,15 +875,36 @@ local function CreateCharacterView(parentFrame)
             end
             
             btn:Show()
+            displayIdx = displayIdx + 1
         end
         
         local gridW = cols * (btnSize + spacing) - spacing + 12
         local gridH = rows * (btnSize + spacing) - spacing + 12
-        local maxH = 210
-        local actualH = math.min(maxH, gridH)
+        local navH = (maxPages > 1) and 24 or 0
         
         content:SetSize(cols * (btnSize + spacing), rows * (btnSize + spacing))
-        flyout:SetSize(gridW + 28, actualH + 16)
+        
+        if isBottomSlot then
+            content:ClearAllPoints()
+            content:SetPoint("BOTTOMLEFT", flyout, "BOTTOMLEFT", 6, navH + 6)
+            if maxPages > 1 then
+                nav:ClearAllPoints()
+                nav:SetPoint("BOTTOM", flyout, "BOTTOM", 0, 4)
+            end
+        else
+            content:ClearAllPoints()
+            if isRightSlot then
+                content:SetPoint("TOPRIGHT", flyout, "TOPRIGHT", -6, -6)
+            else
+                content:SetPoint("TOPLEFT", flyout, "TOPLEFT", 6, -6)
+            end
+            if maxPages > 1 then
+                nav:ClearAllPoints()
+                nav:SetPoint("BOTTOM", flyout, "BOTTOM", 0, 4)
+            end
+        end
+        
+        flyout:SetSize(gridW, gridH + navH)
         flyout:Show()
     end
 
