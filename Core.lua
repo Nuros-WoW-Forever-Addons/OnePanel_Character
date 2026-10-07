@@ -999,67 +999,121 @@ local function CreateCharacterView(parentFrame)
         }
     end
     
+    local function GetDefaultSetIcon()
+        local prioritySlots = { 16, 17, 18, 1, 3, 5, 7, 10, 6, 8, 2, 15, 4, 19, 9, 11, 12, 13, 14 }
+        for _, slot in ipairs(prioritySlots) do
+            local tex = GetInventoryItemTexture("player", slot)
+            if tex then
+                return tex
+            end
+        end
+        return 134400
+    end
+
+    local function GetEquippedSetName()
+        local setIDs = C_EquipmentSet and C_EquipmentSet.GetEquipmentSetIDs and C_EquipmentSet.GetEquipmentSetIDs() or {}
+        for _, setID in ipairs(setIDs) do
+            local name, _, _, isEquipped = C_EquipmentSet.GetEquipmentSetInfo(setID)
+            if isEquipped then
+                return name
+            end
+        end
+        return nil
+    end
+
     -- New Equipment Set Modal Dialog
-    local function ShowNewSetDialog()
+    local function ShowNewSetDialog(defaultName)
         if not _G["OnePanel_NewSetDialog"] then
-            local dlg = CreateFrame("Frame", "OnePanel_NewSetDialog", UIParent, "DialogBoxFrame")
-            dlg:SetSize(300, 160)
+            local dlg = CreateFrame("Frame", "OnePanel_NewSetDialog", UIParent)
+            dlg:SetSize(320, 150)
             dlg:SetPoint("CENTER", UIParent, "CENTER", 0, 40)
             dlg:SetFrameStrata("DIALOG")
+            dlg:SetFrameLevel(1000)
             dlg:SetMovable(true)
             dlg:EnableMouse(true)
             dlg:RegisterForDrag("LeftButton")
             dlg:SetScript("OnDragStart", dlg.StartMoving)
             dlg:SetScript("OnDragStop", dlg.StopMovingOrSizing)
             
+            if Utils and Utils.FrameHelper then
+                Utils.FrameHelper:ApplyBackdrop(dlg,
+                    "Interface\\FrameGeneral\\UI-Background-Marble",
+                    "Interface\\Tooltips\\UI-Tooltip-Border",
+                    16, 16, { left = 4, right = 4, top = 4, bottom = 4 }
+                )
+            end
+            
+            local titleBg = dlg:CreateTexture(nil, "ARTWORK")
+            titleBg:SetSize(312, 24)
+            titleBg:SetPoint("TOP", dlg, "TOP", 0, -4)
+            titleBg:SetColorTexture(0.1, 0.1, 0.1, 0.6)
+            
             local dlgTitle = dlg:CreateFontString(nil, "OVERLAY", "GameFontHighlight")
-            dlgTitle:SetPoint("TOP", dlg, "TOP", 0, -14)
-            dlgTitle:SetText("Create New Equipment Set")
+            dlgTitle:SetPoint("CENTER", titleBg, "CENTER", 0, 0)
+            dlgTitle:SetText("Save Equipment Set")
             
             local inputLabel = dlg:CreateFontString(nil, "OVERLAY", "GameFontNormalSmall")
-            inputLabel:SetPoint("TOPLEFT", dlg, "TOPLEFT", 20, -42)
+            inputLabel:SetPoint("TOPLEFT", dlg, "TOPLEFT", 20, -38)
             inputLabel:SetText("Set Name:")
             
             local input = CreateFrame("EditBox", "OnePanel_NewSetInput", dlg, "InputBoxTemplate")
-            input:SetSize(250, 22)
+            input:SetSize(276, 22)
             input:SetPoint("TOPLEFT", inputLabel, "BOTTOMLEFT", 0, -6)
             input:SetAutoFocus(true)
             dlg.Input = input
             
-            local saveBtn = CreateFrame("Button", nil, dlg, "UIPanelButtonTemplate")
-            saveBtn:SetSize(100, 22)
-            saveBtn:SetPoint("BOTTOMLEFT", dlg, "BOTTOMLEFT", 30, 20)
-            saveBtn:SetText("Save Set")
-            saveBtn:SetScript("OnClick", function()
+            local function PerformSave()
                 local setName = (input:GetText() or ""):match("^%s*(.-)%s*$")
                 if setName and setName ~= "" then
-                    if C_EquipmentSet and C_EquipmentSet.CreateEquipmentSet then
-                        local iconID = 134400 -- Default question mark
-                        local mainHandLink = GetInventoryItemLink("player", 16)
-                        if mainHandLink then
-                            iconID = GetItemIcon(mainHandLink) or iconID
+                    if C_EquipmentSet then
+                        local iconID = GetDefaultSetIcon()
+                        local existingID = C_EquipmentSet.GetEquipmentSetID and C_EquipmentSet.GetEquipmentSetID(setName)
+                        if existingID and C_EquipmentSet.SaveEquipmentSet then
+                            C_EquipmentSet.SaveEquipmentSet(existingID)
+                        elseif C_EquipmentSet.CreateEquipmentSet then
+                            C_EquipmentSet.CreateEquipmentSet(setName, iconID)
                         end
-                        C_EquipmentSet.CreateEquipmentSet(setName, iconID)
                     end
                 end
                 dlg:Hide()
-            end)
+            end
             
-            local cancelBtn = CreateFrame("Button", nil, dlg, "UIPanelButtonTemplate")
-            cancelBtn:SetSize(100, 22)
-            cancelBtn:SetPoint("BOTTOMRIGHT", dlg, "BOTTOMRIGHT", -30, 20)
+            input:SetScript("OnEnterPressed", PerformSave)
+            input:SetScript("OnEscapePressed", function() dlg:Hide() end)
+            
+            local saveBtn = CreateFrame("Button", "OnePanel_NewSetSaveBtn", dlg, "UIPanelButtonTemplate")
+            saveBtn:SetSize(110, 22)
+            saveBtn:SetPoint("BOTTOMLEFT", dlg, "BOTTOMLEFT", 24, 16)
+            saveBtn:SetText("Save Set")
+            saveBtn:SetScript("OnClick", PerformSave)
+            
+            local cancelBtn = CreateFrame("Button", "OnePanel_NewSetCancelBtn", dlg, "UIPanelButtonTemplate")
+            cancelBtn:SetSize(110, 22)
+            cancelBtn:SetPoint("BOTTOMRIGHT", dlg, "BOTTOMRIGHT", -24, 16)
             cancelBtn:SetText("Cancel")
             cancelBtn:SetScript("OnClick", function()
                 dlg:Hide()
             end)
         end
         
-        _G["OnePanel_NewSetDialog"].Input:SetText("")
-        _G["OnePanel_NewSetDialog"]:Show()
+        -- Hide old template button if it existed from previous session
+        if _G["OnePanel_NewSetDialogButton"] then
+            _G["OnePanel_NewSetDialogButton"]:Hide()
+        end
+        
+        local dlg = _G["OnePanel_NewSetDialog"]
+        dlg.Input:SetText(defaultName or "")
+        dlg.Input:HighlightText()
+        dlg:Show()
     end
     
-    newSetBtn:SetScript("OnClick", ShowNewSetDialog)
-    saveCurrentBtn:SetScript("OnClick", ShowNewSetDialog)
+    newSetBtn:SetScript("OnClick", function()
+        ShowNewSetDialog("")
+    end)
+    saveCurrentBtn:SetScript("OnClick", function()
+        local name = GetEquippedSetName()
+        ShowNewSetDialog(name or "")
+    end)
     
     -- Register Equipment Set Events for Auto Refresh
     local eqEventFrame = CreateFrame("Frame", "OnePanel_EquipmentSet_EventFrame", outfitsView)
