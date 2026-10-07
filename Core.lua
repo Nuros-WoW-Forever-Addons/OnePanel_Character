@@ -476,8 +476,54 @@ local function CreateCharacterView(parentFrame)
     -- Equipment Slot Item Selector Flyout
     ---------------------------------------------------------------------------
     
-    local function GetItemsForSlot(slotID)
-        local items = {}
+    local function UnequipItemSlot(slotID)
+        if not GetInventoryItemTexture("player", slotID) then return false end
+        
+        for bag = 0, 4 do
+            local numSlots = C_Container and C_Container.GetContainerNumSlots and C_Container.GetContainerNumSlots(bag) or (GetContainerNumSlots and GetContainerNumSlots(bag))
+            if numSlots then
+                for slot = 1, numSlots do
+                    local link = C_Container and C_Container.GetContainerItemLink and C_Container.GetContainerItemLink(bag, slot) or (GetContainerItemLink and GetContainerItemLink(bag, slot))
+                    if not link then
+                        PickupInventoryItem(slotID)
+                        if CursorHasItem() then
+                            if C_Container and C_Container.PickupContainerItem then
+                                C_Container.PickupContainerItem(bag, slot)
+                            elseif PickupContainerItem then
+                                PickupContainerItem(bag, slot)
+                            end
+                        end
+                        return true
+                    end
+                end
+            end
+        end
+        
+        PickupInventoryItem(slotID)
+        if CursorHasItem() and PutItemInBackpack then
+            PutItemInBackpack()
+        end
+        return true
+    end
+
+    local function IsItemValidForSlot(slotID, equipLoc, itemLink)
+        if not equipLoc or equipLoc == "" then return false end
+        
+        local _, playerClass = UnitClass("player")
+        local isRelicClass = (playerClass == "DRUID" or playerClass == "PALADIN" or playerClass == "SHAMAN" or playerClass == "DEATHKNIGHT")
+        
+        -- Special filtering for Slot 18 (Ranged vs Relic)
+        if slotID == 18 then
+            if isRelicClass then
+                if equipLoc ~= "INVTYPE_RELIC" then
+                    return false
+                end
+            else
+                if equipLoc == "INVTYPE_RELIC" then
+                    return false
+                end
+            end
+        end
         
         local slotEquipTypes = {
             [1]  = { "INVTYPE_HEAD" },
@@ -502,10 +548,24 @@ local function CreateCharacterView(parentFrame)
         }
         
         local validTypes = slotEquipTypes[slotID]
-        if not validTypes then return items end
+        if not validTypes then return false end
         
-        local validMap = {}
-        for _, t in ipairs(validTypes) do validMap[t] = true end
+        local isTypeMatch = false
+        for _, t in ipairs(validTypes) do
+            if t == equipLoc then isTypeMatch = true break end
+        end
+        if not isTypeMatch then return false end
+        
+        if itemLink and C_Item and C_Item.IsEquippableItem then
+            local isEquippable = C_Item.IsEquippableItem(itemLink)
+            if not isEquippable then return false end
+        end
+        
+        return true
+    end
+
+    local function GetItemsForSlot(slotID)
+        local items = {}
         
         local getItemInfoFunc = (C_Item and C_Item.GetItemInfo) or GetItemInfo
         local getItemInfoInstantFunc = (C_Item and C_Item.GetItemInfoInstant) or GetItemInfoInstant
@@ -537,7 +597,7 @@ local function CreateCharacterView(parentFrame)
                             end
                         end
                         
-                        if equipLoc and validMap[equipLoc] then
+                        if IsItemValidForSlot(slotID, equipLoc, link) then
                             table.insert(items, {
                                 link = link,
                                 name = name or "Item",
@@ -695,18 +755,11 @@ local function CreateCharacterView(parentFrame)
                 btn:SetScript("OnLeave", function() GameTooltip_Hide() end)
                 
                 btn:SetScript("OnClick", function()
-                    if GetInventoryItemTexture("player", slotInfo.id) then
-                        PickupInventoryItem(slotInfo.id)
-                        if CursorHasItem() then
-                            local autoEquip = _G.AutoEquipCursorItem or _G.PutItemInBackpack
-                            if type(autoEquip) == "function" then
-                                autoEquip()
-                            else
-                                pcall(PickupContainerItem, 0, 0)
-                            end
-                        end
-                    end
+                    UnequipItemSlot(slotInfo.id)
                     flyout:Hide()
+                    if container and container.UpdateEquipment then
+                        container:UpdateEquipment()
+                    end
                 end)
             else
                 btn.Icon:SetTexture(entry.texture)
