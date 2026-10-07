@@ -233,7 +233,7 @@ local function CreateCharacterView(parentFrame)
         
         local baseCamScale = 1.0
         local basePosY = 0     -- Horizontal offset (0 = centered)
-        local basePosZ = -0.08 -- Vertical offset (negative = lower onto ground)
+        local basePosZ = -0.04 -- Vertical offset (raised up inside viewport)
         
         local form = GetShapeshiftForm and GetShapeshiftForm()
         local formID = GetShapeshiftFormID and GetShapeshiftFormID()
@@ -585,10 +585,10 @@ local function CreateCharacterView(parentFrame)
     container.slots[17] = offHand
     container.slots[18] = ranged
     
-    -- Native Right-Side Collapse / Expand Toggle Button (Anchored to TOPRIGHT of leftArea at -6,-6)
+    -- Native Right-Side Collapse / Expand Toggle Button (Anchored to TOPRIGHT of leftArea at -14,-18)
     local toggleBtn = CreateFrame("Button", "OnePanel_RightSideToggleButton", leftArea)
     toggleBtn:SetSize(28, 28)
-    toggleBtn:SetPoint("TOPRIGHT", leftArea, "TOPRIGHT", -6, -6)
+    toggleBtn:SetPoint("TOPRIGHT", leftArea, "TOPRIGHT", -14, -18)
     toggleBtn:SetFrameLevel(510)
     
     local toggleIcon = toggleBtn:CreateTexture(nil, "ARTWORK")
