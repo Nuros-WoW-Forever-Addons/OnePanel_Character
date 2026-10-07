@@ -1299,17 +1299,13 @@ local function CreateCharacterView(parentFrame)
 
     -- New / Edit Equipment Set Modal Dialog (With Embedded Icon Picker Grid)
     ShowNewSetDialog = function(defaultName, defaultIconID, existingSetID)
+        local hostFrame = (OnePanel and OnePanel.frame) or _G["OnePanelFrame"] or UIParent
         if not _G["OnePanel_NewSetDialog"] then
-            local dlg = CreateFrame("Frame", "OnePanel_NewSetDialog", UIParent)
+            local dlg = CreateFrame("Frame", "OnePanel_NewSetDialog", hostFrame)
             dlg:SetSize(360, 340)
-            dlg:SetPoint("CENTER", UIParent, "CENTER", 0, 30)
             dlg:SetFrameStrata("DIALOG")
             dlg:SetFrameLevel(1000)
-            dlg:SetMovable(true)
-            dlg:EnableMouse(true)
-            dlg:RegisterForDrag("LeftButton")
-            dlg:SetScript("OnDragStart", dlg.StartMoving)
-            dlg:SetScript("OnDragStop", dlg.StopMovingOrSizing)
+            dlg:SetPoint("TOPRIGHT", hostFrame, "TOPLEFT", -4, 0)
             
             if Utils and Utils.FrameHelper then
                 Utils.FrameHelper:ApplyBackdrop(dlg,
@@ -1416,6 +1412,10 @@ local function CreateCharacterView(parentFrame)
         end
         
         local dlg = _G["OnePanel_NewSetDialog"]
+        dlg:SetParent(hostFrame)
+        dlg:ClearAllPoints()
+        dlg:SetPoint("TOPRIGHT", hostFrame, "TOPLEFT", -4, 0)
+        
         dlg.existingSetID = existingSetID
         dlg.selectedIconID = defaultIconID or GetDefaultSetIcon()
         dlg.IconPreview:SetTexture(dlg.selectedIconID)
@@ -1687,7 +1687,14 @@ local function CreateCharacterView(parentFrame)
     container:RegisterEvent("UPDATE_SHAPESHIFT_FORM")
     container:RegisterEvent("UPDATE_SHAPESHIFT_FORMS")
     container:RegisterEvent("ITEM_LOCK_CHANGED")
-    container:RegisterEvent("CURSOR_CHANGED")
+    container:HookScript("OnHide", function()
+        if _G["OnePanel_NewSetDialog"] then
+            _G["OnePanel_NewSetDialog"]:Hide()
+        end
+        if _G["OnePanel_EquipmentFlyout"] then
+            _G["OnePanel_EquipmentFlyout"]:Hide()
+        end
+    end)
     
     return container
 end
@@ -1729,6 +1736,12 @@ local function RegisterPlugin()
             end
         end,
         OnHide = function(container)
+            if _G["OnePanel_NewSetDialog"] then
+                _G["OnePanel_NewSetDialog"]:Hide()
+            end
+            if _G["OnePanel_EquipmentFlyout"] then
+                _G["OnePanel_EquipmentFlyout"]:Hide()
+            end
         end
     })
 end
