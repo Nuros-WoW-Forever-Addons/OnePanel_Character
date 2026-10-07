@@ -818,13 +818,259 @@ local function CreateCharacterView(parentFrame)
     end
     statsView.Refresh = RefreshStatsDisplay
     
-    -- Sub-View 2: Outfits
+    ---------------------------------------------------------------------------
+    -- Sub-View 2: Equipment Manager / Outfits
+    ---------------------------------------------------------------------------
     local outfitsView = CreateFrame("Frame", "OnePanel_OutfitsSubView", subContentView)
     outfitsView:SetAllPoints(subContentView)
-    local outfitsText = outfitsView:CreateFontString(nil, "OVERLAY", "GameFontHighlight")
-    outfitsText:SetPoint("TOP", outfitsView, "TOP", 0, -20)
-    outfitsText:SetText("|cff00ccffEquipment Manager / Outfits|r")
     subPanel.views["outfits"] = outfitsView
+    
+    -- Top Action Buttons (+ New Set & Save Current)
+    local newSetBtn = CreateFrame("Button", "OnePanel_NewSetBtn", outfitsView, "UIPanelButtonTemplate")
+    newSetBtn:SetSize(86, 22)
+    newSetBtn:SetPoint("TOPLEFT", outfitsView, "TOPLEFT", 4, -4)
+    newSetBtn:SetText("+ New Set")
+    
+    local saveCurrentBtn = CreateFrame("Button", "OnePanel_SaveCurrentBtn", outfitsView, "UIPanelButtonTemplate")
+    saveCurrentBtn:SetSize(86, 22)
+    saveCurrentBtn:SetPoint("TOPRIGHT", outfitsView, "TOPRIGHT", -22, -4)
+    saveCurrentBtn:SetText("Save Current")
+    
+    -- Equipment Sets Scroll View
+    local outfitsScroll = CreateFrame("ScrollFrame", "OnePanel_OutfitsScroll", outfitsView, "UIPanelScrollFrameTemplate")
+    outfitsScroll:SetPoint("TOPLEFT", outfitsView, "TOPLEFT", 0, -32)
+    outfitsScroll:SetPoint("BOTTOMRIGHT", outfitsView, "BOTTOMRIGHT", 0, 0)
+    outfitsScroll:EnableMouseWheel(true)
+    outfitsScroll:SetScript("OnMouseWheel", function(self, delta)
+        local cur = self:GetVerticalScroll()
+        local maxScroll = self:GetVerticalScrollRange()
+        local step = 28
+        self:SetVerticalScroll(math.max(0, math.min(maxScroll, cur - (delta * step))))
+    end)
+    
+    -- Custom ScrollBar Position
+    local outfitsSbName = outfitsScroll:GetName() .. "ScrollBar"
+    local outfitsScrollBar = _G[outfitsSbName]
+    if outfitsScrollBar then
+        outfitsScrollBar:ClearAllPoints()
+        outfitsScrollBar:SetPoint("TOPRIGHT", outfitsView, "TOPRIGHT", -4, -48)
+        outfitsScrollBar:SetPoint("BOTTOMRIGHT", outfitsView, "BOTTOMRIGHT", -4, 18)
+    end
+    
+    local outfitsContent = CreateFrame("Frame", "OnePanel_OutfitsContent", outfitsScroll)
+    outfitsContent:SetSize(176, 400)
+    outfitsScroll:SetScrollChild(outfitsContent)
+    
+    -- Dynamic Set List Renderer
+    local function RefreshEquipmentSets()
+        if not outfitsContent.rows then outfitsContent.rows = {} end
+        for _, r in ipairs(outfitsContent.rows) do r:Hide() end
+        
+        local setIDs = C_EquipmentSet and C_EquipmentSet.GetEquipmentSetIDs and C_EquipmentSet.GetEquipmentSetIDs() or {}
+        local yOffset = -2
+        
+        if #setIDs == 0 then
+            local emptyMsg = outfitsContent.emptyMsg
+            if not emptyMsg then
+                emptyMsg = outfitsContent:CreateFontString(nil, "OVERLAY", "GameFontHighlightSmall")
+                emptyMsg:SetPoint("TOP", outfitsContent, "TOP", 0, -30)
+                emptyMsg:SetText("|cffaaaaaaNo equipment sets saved.\nClick '+ New Set' above.|r")
+                outfitsContent.emptyMsg = emptyMsg
+            end
+            emptyMsg:Show()
+            outfitsContent:SetHeight(100)
+            return
+        elseif outfitsContent.emptyMsg then
+            outfitsContent.emptyMsg:Hide()
+        end
+        
+        for idx, setID in ipairs(setIDs) do
+            local name, iconFileID, _, isEquipped, numItems, numEquipped, numInInventory, numLost = C_EquipmentSet.GetEquipmentSetInfo(setID)
+            
+            local row = outfitsContent.rows[idx]
+            if not row then
+                row = CreateFrame("Frame", nil, outfitsContent)
+                row:SetSize(174, 46)
+                
+                local rowBg = row:CreateTexture(nil, "BACKGROUND")
+                rowBg:SetAllPoints(row)
+                row.Bg = rowBg
+                
+                -- Set Icon
+                local icon = row:CreateTexture(nil, "ARTWORK")
+                icon:SetSize(32, 32)
+                icon:SetPoint("LEFT", row, "LEFT", 4, 0)
+                icon:SetTexCoord(0.08, 0.92, 0.08, 0.92)
+                row.Icon = icon
+                
+                -- Set Name
+                local nameText = row:CreateFontString(nil, "OVERLAY", "GameFontHighlight")
+                nameText:SetPoint("TOPLEFT", icon, "TOPRIGHT", 6, 2)
+                nameText:SetWidth(80)
+                nameText:SetJustifyH("LEFT")
+                row.NameText = nameText
+                
+                -- Status / Equipped Text
+                local statusText = row:CreateFontString(nil, "OVERLAY", "GameFontNormalSmall")
+                statusText:SetPoint("TOPLEFT", nameText, "BOTTOMLEFT", 0, -2)
+                statusText:SetWidth(80)
+                statusText:SetJustifyH("LEFT")
+                row.StatusText = statusText
+                
+                -- Equip Button
+                local equipBtn = CreateFrame("Button", nil, row, "UIPanelButtonTemplate")
+                equipBtn:SetSize(48, 18)
+                equipBtn:SetPoint("RIGHT", row, "RIGHT", -4, 8)
+                equipBtn:SetText("Equip")
+                row.EquipBtn = equipBtn
+                
+                -- Delete Button
+                local deleteBtn = CreateFrame("Button", nil, row, "UIPanelButtonTemplate")
+                deleteBtn:SetSize(48, 16)
+                deleteBtn:SetPoint("RIGHT", row, "RIGHT", -4, -11)
+                deleteBtn:SetText("Delete")
+                row.DeleteBtn = deleteBtn
+                
+                outfitsContent.rows[idx] = row
+            end
+            
+            -- Alternating Row Colors
+            if idx % 2 == 1 then
+                row.Bg:SetColorTexture(0.12, 0.12, 0.12, 0.5)
+            else
+                row.Bg:SetColorTexture(0.06, 0.06, 0.06, 0.5)
+            end
+            
+            row:ClearAllPoints()
+            row:SetPoint("TOPLEFT", outfitsContent, "TOPLEFT", 1, yOffset)
+            
+            row.Icon:SetTexture(iconFileID or "Interface\\Icons\\INV_Misc_QuestionMark")
+            row.NameText:SetText(name or ("Set " .. setID))
+            
+            if isEquipped then
+                row.StatusText:SetText("|cff00ff00Equipped|r")
+                row.EquipBtn:Disable()
+            else
+                local total = numItems or 16
+                local eq = numEquipped or 0
+                if numLost and numLost > 0 then
+                    row.StatusText:SetText(string.format("|cffff4444%d Lost|r", numLost))
+                else
+                    row.StatusText:SetText(string.format("%d/%d Items", eq, total))
+                end
+                row.EquipBtn:Enable()
+            end
+            
+            row.EquipBtn:SetScript("OnClick", function()
+                if C_EquipmentSet and C_EquipmentSet.UseEquipmentSet then
+                    C_EquipmentSet.UseEquipmentSet(setID)
+                end
+            end)
+            
+            row.DeleteBtn:SetScript("OnClick", function()
+                if C_EquipmentSet and C_EquipmentSet.DeleteEquipmentSet then
+                    StaticPopup_Show("ONEPANEL_CONFIRM_DELETE_SET", name, nil, setID)
+                end
+            end)
+            
+            row:Show()
+            yOffset = yOffset - 48
+        end
+        
+        outfitsContent:SetHeight(math.abs(yOffset) + 30)
+    end
+    outfitsView.Refresh = RefreshEquipmentSets
+    
+    -- Register Delete Set Confirmation Popup
+    if not StaticPopupDialogs["ONEPANEL_CONFIRM_DELETE_SET"] then
+        StaticPopupDialogs["ONEPANEL_CONFIRM_DELETE_SET"] = {
+            text = "Delete equipment set '%s'?",
+            button1 = "Delete",
+            button2 = "Cancel",
+            OnAccept = function(self, data)
+                if data and C_EquipmentSet and C_EquipmentSet.DeleteEquipmentSet then
+                    C_EquipmentSet.DeleteEquipmentSet(data)
+                end
+            end,
+            timeout = 0,
+            whileDead = true,
+            hideOnEscape = true,
+            preferredIndex = 3,
+        }
+    end
+    
+    -- New Equipment Set Modal Dialog
+    local function ShowNewSetDialog()
+        if not _G["OnePanel_NewSetDialog"] then
+            local dlg = CreateFrame("Frame", "OnePanel_NewSetDialog", UIParent, "DialogBoxFrame")
+            dlg:SetSize(300, 160)
+            dlg:SetPoint("CENTER", UIParent, "CENTER", 0, 40)
+            dlg:SetFrameStrata("DIALOG")
+            dlg:SetMovable(true)
+            dlg:EnableMouse(true)
+            dlg:RegisterForDrag("LeftButton")
+            dlg:SetScript("OnDragStart", dlg.StartMoving)
+            dlg:SetScript("OnDragStop", dlg.StopMovingOrSizing)
+            
+            local dlgTitle = dlg:CreateFontString(nil, "OVERLAY", "GameFontHighlight")
+            dlgTitle:SetPoint("TOP", dlg, "TOP", 0, -14)
+            dlgTitle:SetText("Create New Equipment Set")
+            
+            local inputLabel = dlg:CreateFontString(nil, "OVERLAY", "GameFontNormalSmall")
+            inputLabel:SetPoint("TOPLEFT", dlg, "TOPLEFT", 20, -42)
+            inputLabel:SetText("Set Name:")
+            
+            local input = CreateFrame("EditBox", "OnePanel_NewSetInput", dlg, "InputBoxTemplate")
+            input:SetSize(250, 22)
+            input:SetPoint("TOPLEFT", inputLabel, "BOTTOMLEFT", 0, -6)
+            input:SetAutoFocus(true)
+            dlg.Input = input
+            
+            local saveBtn = CreateFrame("Button", nil, dlg, "UIPanelButtonTemplate")
+            saveBtn:SetSize(100, 22)
+            saveBtn:SetPoint("BOTTOMLEFT", dlg, "BOTTOMLEFT", 30, 20)
+            saveBtn:SetText("Save Set")
+            saveBtn:SetScript("OnClick", function()
+                local setName = (input:GetText() or ""):match("^%s*(.-)%s*$")
+                if setName and setName ~= "" then
+                    if C_EquipmentSet and C_EquipmentSet.CreateEquipmentSet then
+                        local iconID = 134400 -- Default question mark
+                        local mainHandLink = GetInventoryItemLink("player", 16)
+                        if mainHandLink then
+                            iconID = GetItemIcon(mainHandLink) or iconID
+                        end
+                        C_EquipmentSet.CreateEquipmentSet(setName, iconID)
+                    end
+                end
+                dlg:Hide()
+            end)
+            
+            local cancelBtn = CreateFrame("Button", nil, dlg, "UIPanelButtonTemplate")
+            cancelBtn:SetSize(100, 22)
+            cancelBtn:SetPoint("BOTTOMRIGHT", dlg, "BOTTOMRIGHT", -30, 20)
+            cancelBtn:SetText("Cancel")
+            cancelBtn:SetScript("OnClick", function()
+                dlg:Hide()
+            end)
+        end
+        
+        _G["OnePanel_NewSetDialog"].Input:SetText("")
+        _G["OnePanel_NewSetDialog"]:Show()
+    end
+    
+    newSetBtn:SetScript("OnClick", ShowNewSetDialog)
+    saveCurrentBtn:SetScript("OnClick", ShowNewSetDialog)
+    
+    -- Register Equipment Set Events for Auto Refresh
+    local eqEventFrame = CreateFrame("Frame", "OnePanel_EquipmentSet_EventFrame", outfitsView)
+    eqEventFrame:RegisterEvent("EQUIPMENT_SETS_CHANGED")
+    eqEventFrame:RegisterEvent("EQUIPMENT_SWAP_FINISHED")
+    eqEventFrame:RegisterEvent("PLAYER_EQUIPMENT_CHANGED")
+    eqEventFrame:SetScript("OnEvent", function()
+        if outfitsView and outfitsView.Refresh then
+            pcall(outfitsView.Refresh)
+        end
+    end)
     
     -- Sub-View 3: Titles
     local titlesView = CreateFrame("Frame", "OnePanel_TitlesSubView", subContentView)
