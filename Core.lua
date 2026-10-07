@@ -31,10 +31,13 @@ local EquipmentSlotsRight = {
     { id = 14, name = "Trinket1Slot", icon = "Interface\\PaperDoll\\UI-PaperDoll-Slot-Trinket" },
 }
 
+local _, playerClass = UnitClass("player")
+local isRelicClass = (playerClass == "DRUID" or playerClass == "PALADIN" or playerClass == "SHAMAN" or playerClass == "DEATHKNIGHT")
+
 local EquipmentSlotsBottom = {
     { id = 16, name = "MainHandSlot", icon = "Interface\\PaperDoll\\UI-PaperDoll-Slot-MainHand" },
     { id = 17, name = "SecondaryHandSlot", icon = "Interface\\PaperDoll\\UI-PaperDoll-Slot-SecondaryHand" },
-    { id = 18, name = "RangedSlot",   icon = "Interface\\PaperDoll\\UI-PaperDoll-Slot-Ranged" },
+    { id = 18, name = isRelicClass and "RelicSlot" or "RangedSlot", icon = isRelicClass and "Interface\\PaperDoll\\UI-PaperDoll-Slot-Relic" or "Interface\\PaperDoll\\UI-PaperDoll-Slot-Ranged" },
 }
 
 -- Correct WoW Resistance School Indices: 2: Fire, 3: Nature, 4: Frost, 5: Shadow, 6: Arcane
@@ -602,12 +605,12 @@ local function CreateCharacterView(parentFrame)
         
         local flyoutButtons = {}
         
-        -- 1. If an item is currently equipped, the first item in the grid is the Unequip button
+        -- 1. If an item is currently equipped, the first item in the grid is the Place In Bags unequip button
         if hasEquipped then
             table.insert(flyoutButtons, {
                 isUnequip = true,
-                name = "Unequip Item",
-                texture = currentTexture,
+                name = "Place In Bags",
+                texture = "Interface\\PaperDoll\\UI-PaperDoll-Slot-Bag",
             })
         end
         
@@ -663,12 +666,6 @@ local function CreateCharacterView(parentFrame)
                 border:SetBlendMode("ADD")
                 btn.Border = border
                 
-                local unequipCross = btn:CreateTexture(nil, "OVERLAY", nil, 2)
-                unequipCross:SetTexture("Interface\\Buttons\\UI-Group-Loot-Pass-Up")
-                unequipCross:SetSize(33, 33)
-                unequipCross:SetPoint("CENTER", btn, "CENTER", 0, 0)
-                btn.UnequipCross = unequipCross
-                
                 local hl = btn:CreateTexture(nil, "HIGHLIGHT")
                 hl:SetTexture("Interface\\Buttons\\ButtonHilight-Square")
                 hl:SetBlendMode("ADD")
@@ -684,16 +681,15 @@ local function CreateCharacterView(parentFrame)
             btn:SetPoint("TOPLEFT", content, "TOPLEFT", col * (btnSize + spacing), -row * (btnSize + spacing))
             
             if entry.isUnequip then
-                btn.Icon:SetTexture(entry.texture or slotInfo.icon)
-                btn.Icon:SetDesaturated(true)
-                btn.Icon:SetVertexColor(0.6, 0.6, 0.6, 0.7)
-                btn.UnequipCross:Show()
+                btn.Icon:SetTexture(entry.texture or 136513)
+                btn.Icon:SetDesaturated(false)
+                btn.Icon:SetVertexColor(1, 1, 1, 1)
                 btn.Border:Hide()
                 
                 btn:SetScript("OnEnter", function(self)
                     GameTooltip:SetOwner(self, "ANCHOR_RIGHT")
-                    GameTooltip:SetText("Unequip Slot", 1, 0.3, 0.3)
-                    GameTooltip:AddLine("Click to remove equipped item.", 0.8, 0.8, 0.8)
+                    GameTooltip:SetText("Place In Bags", 1, 1, 1)
+                    GameTooltip:AddLine("Click to unequip item.", 0.8, 0.8, 0.8)
                     GameTooltip:Show()
                 end)
                 btn:SetScript("OnLeave", function() GameTooltip_Hide() end)
@@ -713,7 +709,6 @@ local function CreateCharacterView(parentFrame)
                     flyout:Hide()
                 end)
             else
-                btn.UnequipCross:Hide()
                 btn.Icon:SetTexture(entry.texture)
                 btn.Icon:SetDesaturated(false)
                 btn.Icon:SetVertexColor(1, 1, 1, 1)
@@ -858,7 +853,12 @@ local function CreateCharacterView(parentFrame)
         end
         
         local normalTex = arrow:CreateTexture(nil, "ARTWORK")
-        normalTex:SetAllPoints(arrow)
+        if isBottomSlot then
+            normalTex:SetSize(20, 43)
+            normalTex:SetPoint("CENTER", arrow, "CENTER", 0, 0)
+        else
+            normalTex:SetAllPoints(arrow)
+        end
         local setAtlasNorm = pcall(function() normalTex:SetAtlas("UI-Character-Info-Button-PullSide", true) end)
         if not setAtlasNorm or not normalTex:GetTexture() then
             normalTex:SetTexture(8175457)
@@ -868,12 +868,17 @@ local function CreateCharacterView(parentFrame)
         elseif isRightSlot and normalTex.SetTexCoord then
             normalTex:SetTexCoord(0, 1, 0, 1) -- Chevron points LEFT towards center/flyout
         elseif isBottomSlot and normalTex.SetRotation then
-            normalTex:SetRotation(math.pi / 2) -- Chevron points UP towards paperdoll model
+            normalTex:SetRotation(-math.pi / 2) -- Chevron points UP towards paperdoll model
         end
         arrow:SetNormalTexture(normalTex)
         
         local pushedTex = arrow:CreateTexture(nil, "ARTWORK")
-        pushedTex:SetAllPoints(arrow)
+        if isBottomSlot then
+            pushedTex:SetSize(20, 43)
+            pushedTex:SetPoint("CENTER", arrow, "CENTER", 0, 0)
+        else
+            pushedTex:SetAllPoints(arrow)
+        end
         local setAtlasPushed = pcall(function() pushedTex:SetAtlas("UI-Character-Info-Button-PullSide-Pressed", true) end)
         if not setAtlasPushed or not pushedTex:GetTexture() then
             pushedTex:SetTexture(8175457)
@@ -883,12 +888,17 @@ local function CreateCharacterView(parentFrame)
         elseif isRightSlot and pushedTex.SetTexCoord then
             pushedTex:SetTexCoord(0, 1, 0, 1)
         elseif isBottomSlot and pushedTex.SetRotation then
-            pushedTex:SetRotation(math.pi / 2)
+            pushedTex:SetRotation(-math.pi / 2)
         end
         arrow:SetPushedTexture(pushedTex)
         
         local highlightTex = arrow:CreateTexture(nil, "HIGHLIGHT")
-        highlightTex:SetAllPoints(arrow)
+        if isBottomSlot then
+            highlightTex:SetSize(20, 43)
+            highlightTex:SetPoint("CENTER", arrow, "CENTER", 0, 0)
+        else
+            highlightTex:SetAllPoints(arrow)
+        end
         local setAtlasHl = pcall(function() highlightTex:SetAtlas("UI-Character-Info-Button-PullSide", true) end)
         if not setAtlasHl or not highlightTex:GetTexture() then
             highlightTex:SetTexture(8175457)
@@ -898,7 +908,7 @@ local function CreateCharacterView(parentFrame)
         elseif isRightSlot and highlightTex.SetTexCoord then
             highlightTex:SetTexCoord(0, 1, 0, 1)
         elseif isBottomSlot and highlightTex.SetRotation then
-            highlightTex:SetRotation(math.pi / 2)
+            highlightTex:SetRotation(-math.pi / 2)
         end
         highlightTex:SetBlendMode("ADD")
         arrow:SetHighlightTexture(highlightTex)
