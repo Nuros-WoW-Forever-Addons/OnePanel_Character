@@ -504,13 +504,36 @@ local function CreateCharacterView(parentFrame)
         local validMap = {}
         for _, t in ipairs(validTypes) do validMap[t] = true end
         
+        local getItemInfoFunc = (C_Item and C_Item.GetItemInfo) or GetItemInfo
+        local getItemInfoInstantFunc = (C_Item and C_Item.GetItemInfoInstant) or GetItemInfoInstant
+        
         for bag = 0, 4 do
             local numSlots = C_Container and C_Container.GetContainerNumSlots and C_Container.GetContainerNumSlots(bag) or (GetContainerNumSlots and GetContainerNumSlots(bag))
             if numSlots then
                 for slot = 1, numSlots do
                     local link = C_Container and C_Container.GetContainerItemLink and C_Container.GetContainerItemLink(bag, slot) or (GetContainerItemLink and GetContainerItemLink(bag, slot))
                     if link then
-                        local name, _, quality, itemLevel, _, _, _, _, equipLoc, texture = GetItemInfo(link)
+                        local equipLoc, texture
+                        if getItemInfoInstantFunc then
+                            local ok, _, _, _, eLoc, icon = pcall(getItemInfoInstantFunc, link)
+                            if ok then
+                                equipLoc = eLoc
+                                texture = icon
+                            end
+                        end
+                        
+                        local name, quality, itemLevel
+                        if getItemInfoFunc then
+                            local ok, n, _, q, iLvl, _, _, _, _, eLoc, tex = pcall(getItemInfoFunc, link)
+                            if ok then
+                                name = n
+                                quality = q
+                                itemLevel = iLvl
+                                if not equipLoc then equipLoc = eLoc end
+                                if not texture then texture = tex end
+                            end
+                        end
+                        
                         if equipLoc and validMap[equipLoc] then
                             table.insert(items, {
                                 link = link,
@@ -780,9 +803,15 @@ local function CreateCharacterView(parentFrame)
         
         local arrowTex = arrow:CreateTexture(nil, "ARTWORK")
         arrowTex:SetAllPoints(arrow)
-        local setArrow = pcall(function() arrowTex:SetAtlas("equipmentmanager-icon-outfitbutton", true) end)
-        if not setArrow or not arrowTex:GetTexture() then
-            arrowTex:SetTexture("Interface\\PaperDollInfoFrame\\UI-PaperDoll-Slot-FlyoutButton")
+        local setAtlas1 = pcall(function() arrowTex:SetAtlas("equipmentmanager-icon-outfitbutton", true) end)
+        if not setAtlas1 or not arrowTex:GetTexture() then
+            local setAtlas2 = pcall(function() arrowTex:SetAtlas("Char-Equipment-FlyoutChevron", true) end)
+            if not setAtlas2 or not arrowTex:GetTexture() then
+                arrowTex:SetTexture("Interface\\Buttons\\UI-SpellbookSearch-DrillDown")
+                if isRightSlot then
+                    arrowTex:SetTexCoord(1, 0, 0, 1)
+                end
+            end
         end
         arrow.Icon = arrowTex
         
