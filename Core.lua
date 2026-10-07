@@ -198,67 +198,24 @@ local function CreateCharacterView(parentFrame)
     
     local RefreshPlayerModel = nil
     
-    -- Race-Specific Character Background Art (Dynamic 4-Tile Resolution matching CharacterModelScene)
-    local bgTL = bgContainer:CreateTexture(nil, "BACKGROUND", nil, -8)
-    local bgTR = bgContainer:CreateTexture(nil, "BACKGROUND", nil, -8)
-    local bgBL = bgContainer:CreateTexture(nil, "BACKGROUND", nil, -8)
-    local bgBR = bgContainer:CreateTexture(nil, "BACKGROUND", nil, -8)
+    -- Classic WoW Marble Background Texture
+    local bgTex = bgContainer:CreateTexture(nil, "BACKGROUND", nil, -8)
+    bgTex:SetAllPoints(bgContainer)
+    bgTex:SetTexture("Interface\\FrameGeneral\\UI-Background-Marble")
+    bgTex:SetHorizTile(true)
+    bgTex:SetVertTile(true)
     
     local bgOverlay = bgContainer:CreateTexture(nil, "BACKGROUND", nil, -7)
     bgOverlay:SetAllPoints(bgContainer)
-    bgOverlay:SetAlpha(0.40)
+    bgOverlay:SetAlpha(0.25)
     pcall(function() bgOverlay:SetAtlas("UI-Character-Info-RaceBG-Overlay", false) end)
     
     local function UpdateRaceBackgroundArt()
-        local w = bgContainer:GetWidth()
-        local h = bgContainer:GetHeight()
-        if not w or w == 0 then w = 338 end
-        if not h or h == 0 then h = 431 end
-        
-        local ratio = 0.90
-        local splitW = w * (319 / 399)
-        local splitH = h * (1.0 - ratio) -- Bottom tile height
-        
-        bgTL:ClearAllPoints()
-        bgTL:SetPoint("TOPLEFT", bgContainer, "TOPLEFT", 0, 0)
-        bgTL:SetPoint("BOTTOMRIGHT", bgContainer, "BOTTOMLEFT", splitW, splitH)
-        
-        bgTR:ClearAllPoints()
-        bgTR:SetPoint("TOPLEFT", bgTL, "TOPRIGHT", 0, 0)
-        bgTR:SetPoint("BOTTOMRIGHT", bgContainer, "BOTTOMRIGHT", 0, splitH)
-        
-        bgBL:ClearAllPoints()
-        bgBL:SetPoint("TOPLEFT", bgTL, "BOTTOMLEFT", 0, 0)
-        bgBL:SetPoint("BOTTOMRIGHT", bgContainer, "BOTTOMLEFT", splitW, 0)
-        
-        bgBR:ClearAllPoints()
-        bgBR:SetPoint("TOPLEFT", bgBL, "TOPRIGHT", 0, 0)
-        bgBR:SetPoint("BOTTOMRIGHT", bgContainer, "BOTTOMRIGHT", 0, 0)
-        
-        local nativeScene = _G.CharacterModelScene
-        if nativeScene and nativeScene.GetRegions then
-            local regs = { nativeScene:GetRegions() }
-            local bgTextures = {}
-            for _, r in ipairs(regs) do
-                if r:GetObjectType() == "Texture" and r:GetDrawLayer() == "BACKGROUND" then
-                    local tex = r:GetTexture()
-                    if tex then table.insert(bgTextures, tex) end
-                end
-            end
-            if #bgTextures >= 4 then
-                bgTL:SetTexture(bgTextures[1])
-                bgTR:SetTexture(bgTextures[2])
-                bgBL:SetTexture(bgTextures[3])
-                bgBR:SetTexture(bgTextures[4])
-                return true
-            end
+        if bgTex then
+            bgTex:SetTexture("Interface\\FrameGeneral\\UI-Background-Marble")
+            bgTex:SetHorizTile(true)
+            bgTex:SetVertTile(true)
         end
-        
-        -- Explicit File ID Fallback from native CharacterModelScene dump (8280900, 8280901, 8280904, 8280905)
-        bgTL:SetTexture(8280900)
-        bgTR:SetTexture(8280901)
-        bgBL:SetTexture(8280904)
-        bgBR:SetTexture(8280905)
         return true
     end
     
