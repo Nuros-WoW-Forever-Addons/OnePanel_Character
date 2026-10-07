@@ -470,6 +470,225 @@ local function CreateCharacterView(parentFrame)
     btnReset:SetPoint("LEFT", btnRotRight, "RIGHT", -2, 0)
     
     ---------------------------------------------------------------------------
+    -- Equipment Slot Item Selector Flyout
+    ---------------------------------------------------------------------------
+    
+    local function GetItemsForSlot(slotID)
+        local items = {}
+        
+        local slotEquipTypes = {
+            [1]  = { "INVTYPE_HEAD" },
+            [2]  = { "INVTYPE_NECK" },
+            [3]  = { "INVTYPE_SHOULDER" },
+            [15] = { "INVTYPE_CLOAK" },
+            [5]  = { "INVTYPE_CHEST", "INVTYPE_ROBE" },
+            [4]  = { "INVTYPE_BODY" },
+            [19] = { "INVTYPE_TABARD" },
+            [9]  = { "INVTYPE_WRIST" },
+            [10] = { "INVTYPE_HAND" },
+            [6]  = { "INVTYPE_WAIST" },
+            [7]  = { "INVTYPE_LEGS" },
+            [8]  = { "INVTYPE_FEET" },
+            [11] = { "INVTYPE_FINGER" },
+            [12] = { "INVTYPE_FINGER" },
+            [13] = { "INVTYPE_TRINKET" },
+            [14] = { "INVTYPE_TRINKET" },
+            [16] = { "INVTYPE_WEAPON", "INVTYPE_2HWEAPON", "INVTYPE_WEAPONMAINHAND" },
+            [17] = { "INVTYPE_WEAPON", "INVTYPE_WEAPONOFFHAND", "INVTYPE_SHIELD", "INVTYPE_HOLDABLE" },
+            [18] = { "INVTYPE_RANGED", "INVTYPE_RANGEDRIGHT", "INVTYPE_THROWN", "INVTYPE_RELIC" },
+        }
+        
+        local validTypes = slotEquipTypes[slotID]
+        if not validTypes then return items end
+        
+        local validMap = {}
+        for _, t in ipairs(validTypes) do validMap[t] = true end
+        
+        for bag = 0, 4 do
+            local numSlots = C_Container and C_Container.GetContainerNumSlots and C_Container.GetContainerNumSlots(bag) or (GetContainerNumSlots and GetContainerNumSlots(bag))
+            if numSlots then
+                for slot = 1, numSlots do
+                    local link = C_Container and C_Container.GetContainerItemLink and C_Container.GetContainerItemLink(bag, slot) or (GetContainerItemLink and GetContainerItemLink(bag, slot))
+                    if link then
+                        local name, _, quality, itemLevel, _, _, _, _, equipLoc, texture = GetItemInfo(link)
+                        if equipLoc and validMap[equipLoc] then
+                            table.insert(items, {
+                                link = link,
+                                name = name or "Item",
+                                quality = quality or 1,
+                                itemLevel = itemLevel or 0,
+                                texture = texture or "Interface\\Icons\\INV_Misc_QuestionMark",
+                                bag = bag,
+                                slot = slot,
+                            })
+                        end
+                    end
+                end
+            end
+        end
+        
+        return items
+    end
+
+    local function ShowEquipmentSlotFlyout(anchorFrame, slotInfo)
+        if not _G["OnePanel_EquipmentFlyout"] then
+            local flyout = CreateFrame("Frame", "OnePanel_EquipmentFlyout", UIParent)
+            flyout:SetSize(230, 180)
+            flyout:SetFrameStrata("POPUP")
+            flyout:SetFrameLevel(600)
+            flyout:SetClampedToScreen(true)
+            
+            if Utils and Utils.FrameHelper then
+                Utils.FrameHelper:ApplyBackdrop(flyout,
+                    "Interface\\FrameGeneral\\UI-Background-Marble",
+                    "Interface\\Tooltips\\UI-Tooltip-Border",
+                    16, 16, { left = 4, right = 4, top = 4, bottom = 4 }
+                )
+            end
+            
+            local title = flyout:CreateFontString(nil, "OVERLAY", "GameFontNormalSmall")
+            title:SetPoint("TOPLEFT", flyout, "TOPLEFT", 10, -8)
+            flyout.Title = title
+            
+            local closeBtn = CreateFrame("Button", nil, flyout, "UIPanelCloseButton")
+            closeBtn:SetSize(20, 20)
+            closeBtn:SetPoint("TOPRIGHT", flyout, "TOPRIGHT", -2, -4)
+            closeBtn:SetScript("OnClick", function() flyout:Hide() end)
+            
+            local scrollFrame = CreateFrame("ScrollFrame", "OnePanel_EquipmentFlyoutScroll", flyout, "UIPanelScrollFrameTemplate")
+            scrollFrame:SetPoint("TOPLEFT", flyout, "TOPLEFT", 6, -26)
+            scrollFrame:SetPoint("BOTTOMRIGHT", flyout, "BOTTOMRIGHT", -26, 30)
+            
+            local content = CreateFrame("Frame", "OnePanel_EquipmentFlyoutContent", scrollFrame)
+            content:SetSize(190, 200)
+            scrollFrame:SetScrollChild(content)
+            flyout.Content = content
+            
+            local unequipBtn = CreateFrame("Button", nil, flyout, "UIPanelButtonTemplate")
+            unequipBtn:SetSize(210, 20)
+            unequipBtn:SetPoint("BOTTOM", flyout, "BOTTOM", 0, 6)
+            unequipBtn:SetText("Unequip Slot")
+            flyout.UnequipBtn = unequipBtn
+        end
+        
+        local flyout = _G["OnePanel_EquipmentFlyout"]
+        flyout.Title:SetText(slotInfo.name or "Select Item")
+        
+        flyout:ClearAllPoints()
+        local x = anchorFrame:GetCenter() or 0
+        local screenW = UIParent:GetWidth() or 1000
+        if x > (screenW / 2) then
+            flyout:SetPoint("TOPRIGHT", anchorFrame, "TOPLEFT", -6, 0)
+        else
+            flyout:SetPoint("TOPLEFT", anchorFrame, "TOPRIGHT", 6, 0)
+        end
+        
+        local items = GetItemsForSlot(slotInfo.id)
+        local content = flyout.Content
+        
+        if not content.rows then content.rows = {} end
+        for _, r in ipairs(content.rows) do r:Hide() end
+        
+        local yOffset = 0
+        if #items == 0 then
+            local emptyText = content.emptyText
+            if not emptyText then
+                emptyText = content:CreateFontString(nil, "OVERLAY", "GameFontHighlightSmall")
+                emptyText:SetPoint("TOP", content, "TOP", 0, -20)
+                emptyText:SetText("|cff888888No matching items in bags|r")
+                content.emptyText = emptyText
+            end
+            emptyText:Show()
+            content:SetHeight(60)
+            flyout:SetHeight(120)
+        else
+            if content.emptyText then content.emptyText:Hide() end
+            for idx, item in ipairs(items) do
+                local row = content.rows[idx]
+                if not row then
+                    row = CreateFrame("Button", nil, content)
+                    row:SetSize(190, 32)
+                    
+                    local icon = row:CreateTexture(nil, "ARTWORK")
+                    icon:SetSize(28, 28)
+                    icon:SetPoint("LEFT", row, "LEFT", 2, 0)
+                    icon:SetTexCoord(0.08, 0.92, 0.08, 0.92)
+                    row.Icon = icon
+                    
+                    local nameText = row:CreateFontString(nil, "OVERLAY", "GameFontHighlightSmall")
+                    nameText:SetPoint("TOPLEFT", icon, "TOPRIGHT", 6, -2)
+                    nameText:SetWidth(110)
+                    nameText:SetJustifyH("LEFT")
+                    row.NameText = nameText
+                    
+                    local ilvlText = row:CreateFontString(nil, "OVERLAY", "GameFontDisableSmall")
+                    ilvlText:SetPoint("TOPLEFT", nameText, "BOTTOMLEFT", 0, -2)
+                    ilvlText:SetWidth(110)
+                    ilvlText:SetJustifyH("LEFT")
+                    row.IlvlText = ilvlText
+                    
+                    local hl = row:CreateTexture(nil, "HIGHLIGHT")
+                    hl:SetTexture("Interface\\Buttons\\UI-Common-MouseHilight")
+                    hl:SetBlendMode("ADD")
+                    hl:SetAllPoints(row)
+                    
+                    content.rows[idx] = row
+                end
+                
+                row:ClearAllPoints()
+                row:SetPoint("TOPLEFT", content, "TOPLEFT", 0, yOffset)
+                
+                row.Icon:SetTexture(item.texture)
+                local r, g, b = 1, 1, 1
+                if GetItemQualityColor then
+                    r, g, b = GetItemQualityColor(item.quality)
+                end
+                row.NameText:SetText(string.format("|cff%02x%02x%02x%s|r", r*255, g*255, b*255, item.name))
+                row.IlvlText:SetText(string.format("iLvl %d", item.itemLevel))
+                
+                row:SetScript("OnEnter", function(self)
+                    GameTooltip:SetOwner(self, "ANCHOR_RIGHT")
+                    GameTooltip:SetHyperlink(item.link)
+                    GameTooltip:Show()
+                end)
+                row:SetScript("OnLeave", function() GameTooltip_Hide() end)
+                
+                row:SetScript("OnClick", function()
+                    if C_Container and C_Container.UseContainerItem then
+                        C_Container.UseContainerItem(item.bag, item.slot)
+                    elseif UseContainerItem then
+                        UseContainerItem(item.bag, item.slot)
+                    end
+                    flyout:Hide()
+                end)
+                
+                row:Show()
+                yOffset = yOffset - 34
+            end
+            
+            content:SetHeight(math.abs(yOffset) + 10)
+            flyout:SetHeight(math.min(320, math.max(120, math.abs(yOffset) + 65)))
+        end
+        
+        flyout.UnequipBtn:SetScript("OnClick", function()
+            if GetInventoryItemTexture("player", slotInfo.id) then
+                PickupInventoryItem(slotInfo.id)
+                if CursorHasItem() then
+                    local autoEquip = _G.AutoEquipCursorItem or _G.PutItemInBackpack
+                    if type(autoEquip) == "function" then
+                        autoEquip()
+                    else
+                        pcall(PickupContainerItem, 0, 0)
+                    end
+                end
+            end
+            flyout:Hide()
+        end)
+        
+        flyout:Show()
+    end
+
+    ---------------------------------------------------------------------------
     -- Equipment Slot Buttons (Matches Native Anchors & Frame Level 101)
     ---------------------------------------------------------------------------
     
@@ -516,20 +735,10 @@ local function CreateCharacterView(parentFrame)
                 return
             end
             
-            if button == "LeftButton" then
+            if CursorHasItem() then
                 PickupInventoryItem(self.slotId)
-            elseif button == "RightButton" then
-                if GetInventoryItemTexture("player", self.slotId) then
-                    PickupInventoryItem(self.slotId)
-                    if CursorHasItem() then
-                        local autoEquip = _G.AutoEquipCursorItem or _G.PutItemInBackpack
-                        if type(autoEquip) == "function" then
-                            autoEquip()
-                        else
-                            pcall(PickupContainerItem, 0, 0)
-                        end
-                    end
-                end
+            else
+                ShowEquipmentSlotFlyout(self, slotInfo)
             end
             
             if container and container.UpdateEquipment then
@@ -553,6 +762,7 @@ local function CreateCharacterView(parentFrame)
             if not hasItem then
                 GameTooltip:SetText(slotInfo.name, 1, 1, 1)
             end
+            GameTooltip:AddLine("<Click to choose item from bags>", 0.4, 0.8, 1.0)
             GameTooltip:Show()
         end)
         btn:SetScript("OnLeave", function() GameTooltip_Hide() end)
@@ -861,6 +1071,8 @@ local function CreateCharacterView(parentFrame)
     outfitsContent:SetSize(176, 400)
     outfitsScroll:SetScrollChild(outfitsContent)
     
+    local ShowNewSetDialog = nil
+
     -- Dynamic Set List Renderer
     local function RefreshEquipmentSets()
         if not outfitsContent.rows then outfitsContent.rows = {} end
@@ -985,11 +1197,11 @@ local function CreateCharacterView(parentFrame)
             row.IconBtn:SetScript("OnLeave", function() GameTooltip_Hide() end)
             
             row.IconBtn:SetScript("OnClick", function()
-                ShowNewSetDialog(name, iconFileID, setID)
+                if ShowNewSetDialog then ShowNewSetDialog(name, iconFileID, setID) end
             end)
             
             row.EditBtn:SetScript("OnClick", function()
-                ShowNewSetDialog(name, iconFileID, setID)
+                if ShowNewSetDialog then ShowNewSetDialog(name, iconFileID, setID) end
             end)
             
             row.EquipBtn:SetScript("OnClick", function()
@@ -1183,7 +1395,7 @@ local function CreateCharacterView(parentFrame)
     end
 
     -- New / Edit Equipment Set Modal Dialog
-    local function ShowNewSetDialog(defaultName, defaultIconID, existingSetID)
+    ShowNewSetDialog = function(defaultName, defaultIconID, existingSetID)
         if not _G["OnePanel_NewSetDialog"] then
             local dlg = CreateFrame("Frame", "OnePanel_NewSetDialog", UIParent)
             dlg:SetSize(340, 160)
