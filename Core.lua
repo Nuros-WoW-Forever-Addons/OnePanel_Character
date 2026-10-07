@@ -781,8 +781,7 @@ local function CreateCharacterView(parentFrame)
         
         -- Popout Flyout Arrow Button (Appears next to slot when Equipment Manager sub-tab is active)
         local arrow = CreateFrame("Button", nil, btn)
-        arrow:SetSize(16, 16)
-        arrow:SetFrameLevel(110)
+        arrow:SetFrameLevel(btn:GetFrameLevel() + 5)
         
         local isLeftSlot = false
         for _, s in ipairs(EquipmentSlotsLeft) do
@@ -794,18 +793,21 @@ local function CreateCharacterView(parentFrame)
         end
         
         if isLeftSlot then
-            arrow:SetPoint("RIGHT", btn, "LEFT", -2, 0)
+            arrow:SetSize(20, 43)
+            arrow:SetPoint("LEFT", btn, "RIGHT", -2, 0)
         elseif isRightSlot then
-            arrow:SetPoint("LEFT", btn, "RIGHT", 2, 0)
+            arrow:SetSize(20, 43)
+            arrow:SetPoint("RIGHT", btn, "LEFT", 2, 0)
         else
-            arrow:SetPoint("TOP", btn, "BOTTOM", 0, -2)
+            arrow:SetSize(43, 20)
+            arrow:SetPoint("BOTTOM", btn, "TOP", 0, -2)
         end
         
         local arrowTex = arrow:CreateTexture(nil, "ARTWORK")
         arrowTex:SetAllPoints(arrow)
-        local setAtlas1 = pcall(function() arrowTex:SetAtlas("equipmentmanager-icon-outfitbutton", true) end)
+        local setAtlas1 = pcall(function() arrowTex:SetAtlas("Char-Equipment-FlyoutChevron", true) end)
         if not setAtlas1 or not arrowTex:GetTexture() then
-            local setAtlas2 = pcall(function() arrowTex:SetAtlas("Char-Equipment-FlyoutChevron", true) end)
+            local setAtlas2 = pcall(function() arrowTex:SetAtlas("equipmentmanager-icon-outfitbutton", true) end)
             if not setAtlas2 or not arrowTex:GetTexture() then
                 arrowTex:SetTexture("Interface\\Buttons\\UI-SpellbookSearch-DrillDown")
                 if isRightSlot then
