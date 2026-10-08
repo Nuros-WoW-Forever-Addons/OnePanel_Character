@@ -201,9 +201,9 @@ local function CreateCharacterView(parentFrame)
     
     container.UpdateRaceBackgroundArt = UpdateRaceBackgroundArt
     
-    -- Central 3D Player Portrait Model (Matches CharacterModelScene at Frame Level 50)
+    -- Central 3D Player Portrait Model (Canvas extends into upper frame behind header)
     local model = CreateFrame("PlayerModel", "OnePanel_Character3DPlayerModel", leftArea)
-    model:SetPoint("TOPLEFT", leftArea, "TOPLEFT", 0, 0)
+    model:SetPoint("TOPLEFT", leftArea, "TOPLEFT", 0, 24)
     model:SetPoint("BOTTOMRIGHT", leftArea, "BOTTOMRIGHT", 0, 0)
     model:SetFrameLevel(50)
     container.Model = model
@@ -1158,8 +1158,8 @@ local function CreateCharacterView(parentFrame)
     vDivider:SetTexCoord(258/512, 265/512, 0, 1)
     vDivider:SetVertTile(true)
     vDivider:SetWidth(7)
-    vDivider:SetPoint("TOP", leftArea, "TOPRIGHT", 1, 0)
-    vDivider:SetPoint("BOTTOM", leftArea, "BOTTOMRIGHT", 1, 0)
+    vDivider:SetPoint("TOP", leftArea, "TOPRIGHT", 1, 10)
+    vDivider:SetPoint("BOTTOM", leftArea, "BOTTOMRIGHT", 1, -14)
     container.VerticalDivider = vDivider
     
     -- Sync subPanel and vertical divider visibility with OnePanel master expand state
@@ -2038,11 +2038,15 @@ local function RegisterPlugin()
     OnePanel:RegisterPlugin({
         id = "Character",
         title = "Character",
+        usePlayerNameAsTitle = true,
         order = 10,
         use3DPortrait = true,
         icon = "Interface\\Icons\\INV_Chest_Chain_05",
         CreateView = CreateCharacterView,
         OnShow = function(container)
+            if OnePanel and OnePanel.SetTitleText then
+                OnePanel:SetTitleText()
+            end
             if container and container.RefreshPlayerModel then
                 container:RefreshPlayerModel()
             elseif container and container.Model then
