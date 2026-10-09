@@ -1367,6 +1367,22 @@ local function CreateCharacterView(parentFrame)
     local equipBtn = CreateSilverActionButton(outfitsView, "OnePanel_EquipSetBtn", "Equip")
     equipBtn:SetSize(93, 22)
     equipBtn:SetPoint("TOPLEFT", outfitsView, "TOPLEFT", 4, -28)
+    equipBtn:SetMotionScriptsWhileDisabled(true)
+    equipBtn:SetScript("OnEnter", function(self)
+        if InCombatLockdown and InCombatLockdown() then
+            GameTooltip:SetOwner(self, "ANCHOR_RIGHT")
+            GameTooltip:SetText(ERR_NOT_IN_COMBAT or "Cannot change equipment in combat.", 1.0, 0.1, 0.1)
+            GameTooltip:Show()
+        elseif not self:IsEnabled() and selectedSetID and C_EquipmentSet and C_EquipmentSet.GetEquipmentSetInfo then
+            local _, _, _, isEquipped = C_EquipmentSet.GetEquipmentSetInfo(selectedSetID)
+            if isEquipped then
+                GameTooltip:SetOwner(self, "ANCHOR_RIGHT")
+                GameTooltip:SetText("Equipment set is already equipped.", 0.8, 0.8, 0.8)
+                GameTooltip:Show()
+            end
+        end
+    end)
+    equipBtn:SetScript("OnLeave", GameTooltip_Hide)
     
     local saveBtn = CreateSilverActionButton(outfitsView, "OnePanel_SaveSetBtn", "Save")
     saveBtn:SetSize(93, 22)
@@ -1430,7 +1446,7 @@ local function CreateCharacterView(parentFrame)
             saveBtn:Disable()
             return
         end
-        if isEquipped then
+        if isEquipped or (InCombatLockdown and InCombatLockdown()) then
             equipBtn:Disable()
         else
             equipBtn:Enable()
@@ -1602,8 +1618,13 @@ local function CreateCharacterView(parentFrame)
             -- Row Double-Click or Icon Click to Equip Set
             local function EquipCurrent()
                 selectedSetID = setID
+                if InCombatLockdown and InCombatLockdown() then
+                    UIErrorsFrame:AddMessage(ERR_NOT_IN_COMBAT or "Cannot change equipment in combat.", 1.0, 0.1, 0.1, 1.0)
+                    RefreshEquipmentSets()
+                    return
+                end
                 if C_EquipmentSet and C_EquipmentSet.UseEquipmentSet then
-                    C_EquipmentSet.UseEquipmentSet(setID)
+                    pcall(C_EquipmentSet.UseEquipmentSet, setID)
                 end
                 RefreshEquipmentSets()
             end
@@ -1625,7 +1646,11 @@ local function CreateCharacterView(parentFrame)
             row.IconBtn:SetScript("OnEnter", function(self)
                 GameTooltip:SetOwner(self, "ANCHOR_RIGHT")
                 GameTooltip:SetText(name or ("Set " .. setID), 1, 1, 1)
-                GameTooltip:AddLine("Click or double-click to equip", 0.8, 0.8, 0.8)
+                if InCombatLockdown and InCombatLockdown() then
+                    GameTooltip:AddLine(ERR_NOT_IN_COMBAT or "Cannot change equipment in combat.", 1.0, 0.1, 0.1)
+                else
+                    GameTooltip:AddLine("Click or double-click to equip", 0.8, 0.8, 0.8)
+                end
                 GameTooltip:Show()
             end)
             row.IconBtn:SetScript("OnLeave", GameTooltip_Hide)
@@ -1658,7 +1683,7 @@ local function CreateCharacterView(parentFrame)
             button2 = "Cancel",
             OnAccept = function(self, data)
                 if data and data.setID and C_EquipmentSet and C_EquipmentSet.SaveEquipmentSet then
-                    C_EquipmentSet.SaveEquipmentSet(data.setID, data.icon)
+                    pcall(C_EquipmentSet.SaveEquipmentSet, data.setID, data.icon)
                     if outfitsView and outfitsView.Refresh then
                         outfitsView:Refresh()
                     end
@@ -1679,7 +1704,7 @@ local function CreateCharacterView(parentFrame)
             button2 = "Cancel",
             OnAccept = function(self, data)
                 if data and C_EquipmentSet and C_EquipmentSet.DeleteEquipmentSet then
-                    C_EquipmentSet.DeleteEquipmentSet(data)
+                    pcall(C_EquipmentSet.DeleteEquipmentSet, data)
                 end
             end,
             timeout = 0,
@@ -1829,7 +1854,7 @@ local function CreateCharacterView(parentFrame)
                         end
                     else
                         if C_EquipmentSet and C_EquipmentSet.CreateEquipmentSet then
-                            C_EquipmentSet.CreateEquipmentSet(setName, iconID)
+                            pcall(C_EquipmentSet.CreateEquipmentSet, setName, iconID)
                         end
                     end
                     if outfitsView and outfitsView.Refresh then outfitsView:Refresh() end
@@ -1954,8 +1979,12 @@ local function CreateCharacterView(parentFrame)
     end)
     
     equipBtn:SetScript("OnClick", function()
+        if InCombatLockdown and InCombatLockdown() then
+            UIErrorsFrame:AddMessage(ERR_NOT_IN_COMBAT or "Cannot change equipment in combat.", 1.0, 0.1, 0.1, 1.0)
+            return
+        end
         if selectedSetID and C_EquipmentSet and C_EquipmentSet.UseEquipmentSet then
-            C_EquipmentSet.UseEquipmentSet(selectedSetID)
+            pcall(C_EquipmentSet.UseEquipmentSet, selectedSetID)
             if outfitsView and outfitsView.Refresh then
                 outfitsView:Refresh()
             end
@@ -1969,13 +1998,20 @@ local function CreateCharacterView(parentFrame)
         end
     end)
     
-    -- Register Equipment Set Events for Auto Refresh
-    local eqEventFrame = CreateFrame("Frame", "OnePanel_EquipmentSet_EventFrame", outfitsView)
+    -- Register Equipment Set & Combat Events for Auto Refresh
+    local eqEventFrame = CreateFrame("Frame", "OnePanel_EquipmentSet_EventFrame", UIParent)
     eqEventFrame:RegisterEvent("EQUIPMENT_SETS_CHANGED")
     eqEventFrame:RegisterEvent("EQUIPMENT_SWAP_FINISHED")
     eqEventFrame:RegisterEvent("PLAYER_EQUIPMENT_CHANGED")
+    eqEventFrame:RegisterEvent("PLAYER_REGEN_DISABLED")
+    eqEventFrame:RegisterEvent("PLAYER_REGEN_ENABLED")
     eqEventFrame:SetScript("OnEvent", function()
         if outfitsView and outfitsView:IsVisible() and outfitsView.Refresh then
+            pcall(outfitsView.Refresh)
+        end
+    end)
+    outfitsView:HookScript("OnShow", function()
+        if outfitsView.Refresh then
             pcall(outfitsView.Refresh)
         end
     end)
