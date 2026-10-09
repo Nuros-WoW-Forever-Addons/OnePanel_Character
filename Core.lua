@@ -1454,6 +1454,87 @@ local function CreateCharacterView(parentFrame)
         saveBtn:Enable()
     end
 
+    local SLOT_NAMES = {
+        [1]  = _G["HEADSLOT"] or "Head",
+        [2]  = _G["NECKSLOT"] or "Neck",
+        [3]  = _G["SHOULDERSLOT"] or "Shoulder",
+        [4]  = _G["SHIRTSLOT"] or "Shirt",
+        [5]  = _G["CHESTSLOT"] or "Chest",
+        [6]  = _G["WAISTSLOT"] or "Waist",
+        [7]  = _G["LEGSSLOT"] or "Legs",
+        [8]  = _G["FEETSLOT"] or "Feet",
+        [9]  = _G["WRISTSLOT"] or "Wrist",
+        [10] = _G["HANDSSLOT"] or "Hands",
+        [11] = _G["FINGER0SLOT"] or "Ring 1",
+        [12] = _G["FINGER1SLOT"] or "Ring 2",
+        [13] = _G["TRINKET0SLOT"] or "Trinket 1",
+        [14] = _G["TRINKET1SLOT"] or "Trinket 2",
+        [15] = _G["BACKSLOT"] or "Back",
+        [16] = _G["MAINHANDSLOT"] or "Main Hand",
+        [17] = _G["SECONDARYHANDSLOT"] or "Off Hand",
+        [18] = _G["RANGEDSLOT"] or "Ranged",
+        [19] = _G["TABARDSLOT"] or "Tabard",
+    }
+
+    local function GetSetItemStatus(setID)
+        local name, iconFileID, _, isEquipped, numItems, numEquipped, numInInventory, numLost = C_EquipmentSet.GetEquipmentSetInfo(setID)
+        
+        local itemIDs = (C_EquipmentSet and C_EquipmentSet.GetItemIDs) and C_EquipmentSet.GetItemIDs(setID) or {}
+        local locations = (C_EquipmentSet and C_EquipmentSet.GetItemLocations) and C_EquipmentSet.GetItemLocations(setID) or {}
+        
+        local missingList = {}
+        local totalCount = 0
+        local availableCount = 0
+        local usedCounts = {}
+        
+        for slotID = 1, 19 do
+            local itemID = itemIDs[slotID]
+            if itemID and itemID > 0 then
+                totalCount = totalCount + 1
+                local loc = locations[slotID]
+                local isMissing = false
+                
+                local ownedCount = GetItemCount(itemID) or 0
+                local used = usedCounts[itemID] or 0
+                
+                -- Check if item is missing (-1 in locations, or player doesn't have enough copies in bags/equipment)
+                if (loc and loc == -1) or (used >= ownedCount) then
+                    isMissing = true
+                else
+                    usedCounts[itemID] = used + 1
+                end
+                
+                if isMissing then
+                    local itemName, itemLink, itemQuality, _, _, _, _, _, _, itemTexture = GetItemInfo(itemID)
+                    if not itemName and C_Item and C_Item.RequestLoadItemDataByID then
+                        C_Item.RequestLoadItemDataByID(itemID)
+                    end
+                    table.insert(missingList, {
+                        slotID = slotID,
+                        slotName = SLOT_NAMES[slotID] or ("Slot " .. slotID),
+                        itemID = itemID,
+                        name = itemName,
+                        link = itemLink,
+                        quality = itemQuality,
+                        texture = itemTexture,
+                    })
+                else
+                    availableCount = availableCount + 1
+                end
+            end
+        end
+        
+        -- Fallback if itemIDs was empty or returned 0 items
+        if totalCount == 0 and numItems and numItems > 0 then
+            totalCount = numItems
+            local inInv = numInInventory or 0
+            local inEq = numEquipped or 0
+            availableCount = inInv + inEq
+        end
+        
+        return totalCount, availableCount, missingList, isEquipped, name, iconFileID
+    end
+
     -- Dynamic Set List Renderer
     local function RefreshEquipmentSets()
         if not outfitsContent.rows then outfitsContent.rows = {} end
@@ -1491,7 +1572,7 @@ local function CreateCharacterView(parentFrame)
         end
         
         for idx, setID in ipairs(setIDs) do
-            local name, iconFileID, _, isEquipped, numItems, numEquipped, numInInventory, numLost = C_EquipmentSet.GetEquipmentSetInfo(setID)
+            local totalCount, availableCount, missingList, isEquipped, name, iconFileID = GetSetItemStatus(setID)
             
             local row = outfitsContent.rows[idx]
             if not row then
@@ -1539,6 +1620,7 @@ local function CreateCharacterView(parentFrame)
                 nameText:SetPoint("TOPLEFT", iconBtn, "TOPRIGHT", 6, -2)
                 nameText:SetWidth(84)
                 nameText:SetJustifyH("LEFT")
+                nameText:SetWordWrap(false)
                 row.NameText = nameText
                 
                 -- Status / Equipped Text
@@ -1546,6 +1628,7 @@ local function CreateCharacterView(parentFrame)
                 statusText:SetPoint("BOTTOMLEFT", iconBtn, "BOTTOMRIGHT", 6, 3)
                 statusText:SetWidth(84)
                 statusText:SetJustifyH("LEFT")
+                statusText:SetWordWrap(false)
                 row.StatusText = statusText
                 
                 -- Edit Cog Button (Replaces squished red button)
@@ -1600,19 +1683,65 @@ local function CreateCharacterView(parentFrame)
                 row.SelectedHighlight:Hide()
             end
             
-            -- Equipped status
+            -- Equipped status / Item counts (X/Y items; X is red if not all items in bags)
             if isEquipped then
                 row.StatusText:SetText("|cff00ff00Equipped|r")
                 row.Checkmark:Show()
             else
                 row.Checkmark:Hide()
-                local total = numItems or 16
-                local eq = numEquipped or 0
-                if numLost and numLost > 0 then
-                    row.StatusText:SetText(string.format("|cffff4444%d Lost|r", numLost))
+                if totalCount > 0 and availableCount < totalCount then
+                    row.StatusText:SetText(string.format("|cffff4444%d|r|cffaaaaaa/%d Items|r", availableCount, totalCount))
                 else
-                    row.StatusText:SetText(string.format("|cffaaaaaa%d/%d Items|r", eq, total))
+                    row.StatusText:SetText(string.format("|cffaaaaaa%d/%d Items|r", availableCount, totalCount))
                 end
+            end
+            
+            -- Tooltip Handler (Shows missing items if not all pieces in bags)
+            local function ShowSetTooltip(owner)
+                GameTooltip:SetOwner(owner, "ANCHOR_RIGHT")
+                GameTooltip:SetText(name or ("Set " .. setID), 1, 1, 1)
+                
+                if isEquipped then
+                    GameTooltip:AddLine("Currently equipped", 0.2, 1.0, 0.2)
+                else
+                    if #missingList > 0 then
+                        GameTooltip:AddLine(string.format("Missing Items (%d):", #missingList), 1.0, 0.2, 0.2)
+                        for _, item in ipairs(missingList) do
+                            local itemDisplayName = item.link
+                            if not itemDisplayName then
+                                if item.name then
+                                    local _, _, _, hex = GetItemQualityColor(item.quality or 1)
+                                    itemDisplayName = hex and ("|c" .. hex .. item.name .. "|r") or item.name
+                                else
+                                    itemDisplayName = "|cffffffffItem #" .. item.itemID .. "|r"
+                                end
+                            end
+                            GameTooltip:AddLine(string.format("  • |cffcccccc%s:|r %s", item.slotName, itemDisplayName), 1, 1, 1)
+                        end
+                    else
+                        GameTooltip:AddLine(string.format("All %d items ready to equip", totalCount), 0.7, 0.7, 0.7)
+                    end
+                end
+                
+                if InCombatLockdown and InCombatLockdown() then
+                    GameTooltip:AddLine(ERR_NOT_IN_COMBAT or "Cannot change equipment in combat.", 1.0, 0.1, 0.1)
+                else
+                    GameTooltip:AddLine("Click to select, double-click to equip", 0.5, 0.5, 0.5)
+                end
+                
+                GameTooltip:Show()
+            end
+            
+            row:SetScript("OnEnter", ShowSetTooltip)
+            row:SetScript("OnLeave", GameTooltip_Hide)
+            
+            row.IconBtn:SetScript("OnEnter", ShowSetTooltip)
+            row.IconBtn:SetScript("OnLeave", GameTooltip_Hide)
+            
+            if GameTooltip:IsOwned(row) then
+                ShowSetTooltip(row)
+            elseif GameTooltip:IsOwned(row.IconBtn) then
+                ShowSetTooltip(row.IconBtn)
             end
             
             -- Row Double-Click or Icon Click to Equip Set
@@ -1642,18 +1771,6 @@ local function CreateCharacterView(parentFrame)
                 end
             end)
             row.IconBtn:SetScript("OnClick", EquipCurrent)
-            
-            row.IconBtn:SetScript("OnEnter", function(self)
-                GameTooltip:SetOwner(self, "ANCHOR_RIGHT")
-                GameTooltip:SetText(name or ("Set " .. setID), 1, 1, 1)
-                if InCombatLockdown and InCombatLockdown() then
-                    GameTooltip:AddLine(ERR_NOT_IN_COMBAT or "Cannot change equipment in combat.", 1.0, 0.1, 0.1)
-                else
-                    GameTooltip:AddLine("Click or double-click to equip", 0.8, 0.8, 0.8)
-                end
-                GameTooltip:Show()
-            end)
-            row.IconBtn:SetScript("OnLeave", GameTooltip_Hide)
             
             -- Edit Button Click
             row.EditBtn:SetScript("OnClick", function()
@@ -2003,6 +2120,8 @@ local function CreateCharacterView(parentFrame)
     eqEventFrame:RegisterEvent("EQUIPMENT_SETS_CHANGED")
     eqEventFrame:RegisterEvent("EQUIPMENT_SWAP_FINISHED")
     eqEventFrame:RegisterEvent("PLAYER_EQUIPMENT_CHANGED")
+    eqEventFrame:RegisterEvent("BAG_UPDATE_DELAYED")
+    eqEventFrame:RegisterEvent("GET_ITEM_INFO_RECEIVED")
     eqEventFrame:RegisterEvent("PLAYER_REGEN_DISABLED")
     eqEventFrame:RegisterEvent("PLAYER_REGEN_ENABLED")
     eqEventFrame:SetScript("OnEvent", function()
