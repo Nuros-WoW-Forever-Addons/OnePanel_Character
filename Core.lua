@@ -1340,20 +1340,34 @@ local function CreateCharacterView(parentFrame)
     outfitsView:SetAllPoints(subContentView)
     subPanel.views["outfits"] = outfitsView
     
-    -- Top Action Buttons (+ New Set & Save Current)
-    local newSetBtn = CreateFrame("Button", "OnePanel_NewSetBtn", outfitsView, "UIPanelButtonTemplate")
-    newSetBtn:SetSize(86, 22)
+    -- Selected Set ID State for Top Action Controls
+    local selectedSetID = nil
+    
+    local function CreateSilverActionButton(parent, name, text)
+        if Utils and Utils.FrameHelper and Utils.FrameHelper.CreateSilverButton then
+            return Utils.FrameHelper:CreateSilverButton(parent, name, text)
+        end
+        local btn = CreateFrame("Button", name, parent, "UIMenuButtonStretchTemplate")
+        if text then btn:SetText(text) end
+        return btn
+    end
+
+    -- Top Action Buttons (Row 1: + New Set / Row 2: Equip & Save)
+    local newSetBtn = CreateSilverActionButton(outfitsView, "OnePanel_NewSetBtn", "+ New Set")
+    newSetBtn:SetSize(192, 22)
     newSetBtn:SetPoint("TOPLEFT", outfitsView, "TOPLEFT", 4, -4)
-    newSetBtn:SetText("+ New Set")
     
-    local saveCurrentBtn = CreateFrame("Button", "OnePanel_SaveCurrentBtn", outfitsView, "UIPanelButtonTemplate")
-    saveCurrentBtn:SetSize(86, 22)
-    saveCurrentBtn:SetPoint("TOPRIGHT", outfitsView, "TOPRIGHT", -22, -4)
-    saveCurrentBtn:SetText("Save Current")
+    local equipBtn = CreateSilverActionButton(outfitsView, "OnePanel_EquipSetBtn", "Equip")
+    equipBtn:SetSize(93, 22)
+    equipBtn:SetPoint("TOPLEFT", outfitsView, "TOPLEFT", 4, -28)
     
-    -- Equipment Sets Scroll View
+    local saveBtn = CreateSilverActionButton(outfitsView, "OnePanel_SaveSetBtn", "Save")
+    saveBtn:SetSize(93, 22)
+    saveBtn:SetPoint("TOPRIGHT", outfitsView, "TOPRIGHT", -4, -28)
+    
+    -- Equipment Sets Scroll View (Starts beneath Row 2 at y = -54)
     local outfitsScroll = CreateFrame("ScrollFrame", "OnePanel_OutfitsScroll", outfitsView, "UIPanelScrollFrameTemplate")
-    outfitsScroll:SetPoint("TOPLEFT", outfitsView, "TOPLEFT", 0, -32)
+    outfitsScroll:SetPoint("TOPLEFT", outfitsView, "TOPLEFT", 0, -54)
     outfitsScroll:SetPoint("BOTTOMRIGHT", outfitsView, "BOTTOMRIGHT", 0, 0)
     outfitsScroll:EnableMouseWheel(true)
     outfitsScroll:SetScript("OnMouseWheel", function(self, delta)
@@ -1368,7 +1382,7 @@ local function CreateCharacterView(parentFrame)
     local outfitsScrollBar = _G[outfitsSbName]
     if outfitsScrollBar then
         outfitsScrollBar:ClearAllPoints()
-        outfitsScrollBar:SetPoint("TOPRIGHT", outfitsView, "TOPRIGHT", -4, -48)
+        outfitsScrollBar:SetPoint("TOPRIGHT", outfitsView, "TOPRIGHT", -4, -58)
         outfitsScrollBar:SetPoint("BOTTOMRIGHT", outfitsView, "BOTTOMRIGHT", -4, 18)
     end
     
@@ -1378,6 +1392,26 @@ local function CreateCharacterView(parentFrame)
     
     local ShowNewSetDialog = nil
 
+    local function UpdateTopButtonStates()
+        if not selectedSetID or not C_EquipmentSet or not C_EquipmentSet.GetEquipmentSetInfo then
+            equipBtn:Disable()
+            saveBtn:Disable()
+            return
+        end
+        local name, iconFileID, _, isEquipped = C_EquipmentSet.GetEquipmentSetInfo(selectedSetID)
+        if not name then
+            equipBtn:Disable()
+            saveBtn:Disable()
+            return
+        end
+        if isEquipped then
+            equipBtn:Disable()
+        else
+            equipBtn:Enable()
+        end
+        saveBtn:Enable()
+    end
+
     -- Dynamic Set List Renderer
     local function RefreshEquipmentSets()
         if not outfitsContent.rows then outfitsContent.rows = {} end
@@ -1385,6 +1419,19 @@ local function CreateCharacterView(parentFrame)
         
         local setIDs = C_EquipmentSet and C_EquipmentSet.GetEquipmentSetIDs and C_EquipmentSet.GetEquipmentSetIDs() or {}
         local yOffset = -2
+        
+        -- Validate or choose default selectedSetID
+        local foundSelected = false
+        local equippedSetID = nil
+        for _, sID in ipairs(setIDs) do
+            local _, _, _, isEq = C_EquipmentSet.GetEquipmentSetInfo(sID)
+            if isEq then equippedSetID = sID end
+            if sID == selectedSetID then foundSelected = true end
+        end
+        if not foundSelected then
+            selectedSetID = equippedSetID or setIDs[1]
+        end
+        UpdateTopButtonStates()
         
         if #setIDs == 0 then
             local emptyMsg = outfitsContent.emptyMsg
@@ -1406,12 +1453,27 @@ local function CreateCharacterView(parentFrame)
             
             local row = outfitsContent.rows[idx]
             if not row then
-                row = CreateFrame("Frame", nil, outfitsContent)
-                row:SetSize(174, 46)
+                row = CreateFrame("Button", nil, outfitsContent)
+                row:SetSize(174, 42)
                 
-                local rowBg = row:CreateTexture(nil, "BACKGROUND")
+                local rowBg = row:CreateTexture(nil, "BACKGROUND", nil, 0)
                 rowBg:SetAllPoints(row)
                 row.Bg = rowBg
+                
+                -- Selected Highlight Overlay
+                local selHl = row:CreateTexture(nil, "BACKGROUND", nil, 1)
+                selHl:SetTexture("Interface\\Buttons\\UI-Listbox-Highlight")
+                selHl:SetBlendMode("ADD")
+                selHl:SetAlpha(0.35)
+                selHl:SetAllPoints(row)
+                row.SelectedHighlight = selHl
+                
+                -- Hover Highlight Overlay
+                local hovHl = row:CreateTexture(nil, "HIGHLIGHT")
+                hovHl:SetTexture("Interface\\Buttons\\UI-Listbox-Highlight")
+                hovHl:SetBlendMode("ADD")
+                hovHl:SetAlpha(0.2)
+                hovHl:SetAllPoints(row)
                 
                 -- Set Icon Button (Interactive)
                 local iconBtn = CreateFrame("Button", nil, row)
@@ -1423,45 +1485,54 @@ local function CreateCharacterView(parentFrame)
                 icon:SetTexCoord(0.08, 0.92, 0.08, 0.92)
                 row.Icon = icon
                 
-                local iconHl = iconBtn:CreateTexture(nil, "HIGHLIGHT")
-                iconHl:SetTexture("Interface\\Buttons\\ButtonHilight-Square")
-                iconHl:SetBlendMode("ADD")
-                iconHl:SetAllPoints(iconBtn)
+                local checkmark = iconBtn:CreateTexture(nil, "OVERLAY", nil, 2)
+                checkmark:SetTexture("Interface\\RaidFrame\\ReadyCheck-Ready")
+                checkmark:SetSize(14, 14)
+                checkmark:SetPoint("BOTTOMRIGHT", iconBtn, "BOTTOMRIGHT", 2, -2)
+                row.Checkmark = checkmark
                 row.IconBtn = iconBtn
                 
                 -- Set Name
                 local nameText = row:CreateFontString(nil, "OVERLAY", "GameFontHighlight")
-                nameText:SetPoint("TOPLEFT", iconBtn, "TOPRIGHT", 6, 2)
-                nameText:SetWidth(76)
+                nameText:SetPoint("TOPLEFT", iconBtn, "TOPRIGHT", 6, -2)
+                nameText:SetWidth(84)
                 nameText:SetJustifyH("LEFT")
                 row.NameText = nameText
                 
                 -- Status / Equipped Text
                 local statusText = row:CreateFontString(nil, "OVERLAY", "GameFontNormalSmall")
-                statusText:SetPoint("TOPLEFT", nameText, "BOTTOMLEFT", 0, -2)
-                statusText:SetWidth(76)
+                statusText:SetPoint("BOTTOMLEFT", iconBtn, "BOTTOMRIGHT", 6, 3)
+                statusText:SetWidth(84)
                 statusText:SetJustifyH("LEFT")
                 row.StatusText = statusText
                 
-                -- Equip Button
-                local equipBtn = CreateFrame("Button", nil, row, "UIPanelButtonTemplate")
-                equipBtn:SetSize(50, 18)
-                equipBtn:SetPoint("RIGHT", row, "RIGHT", -4, 9)
-                equipBtn:SetText("Equip")
-                row.EquipBtn = equipBtn
-                
-                -- Edit Button
-                local editBtn = CreateFrame("Button", nil, row, "UIPanelButtonTemplate")
-                editBtn:SetSize(25, 16)
-                editBtn:SetPoint("RIGHT", row, "RIGHT", -29, -11)
-                editBtn:SetText("Edit")
+                -- Edit Cog Button (Replaces squished red button)
+                local editBtn = CreateFrame("Button", nil, row)
+                editBtn:SetSize(20, 20)
+                editBtn:SetPoint("RIGHT", row, "RIGHT", -26, 0)
+                editBtn:SetNormalTexture("Interface\\Buttons\\UI-OptionsButton")
+                editBtn:SetHighlightTexture("Interface\\Buttons\\UI-Common-MouseHilight", "ADD")
+                editBtn:SetScript("OnEnter", function(self)
+                    GameTooltip:SetOwner(self, "ANCHOR_RIGHT")
+                    GameTooltip:SetText("Edit Set", 1, 1, 1)
+                    GameTooltip:Show()
+                end)
+                editBtn:SetScript("OnLeave", GameTooltip_Hide)
                 row.EditBtn = editBtn
                 
-                -- Delete Button
-                local deleteBtn = CreateFrame("Button", nil, row, "UIPanelButtonTemplate")
-                deleteBtn:SetSize(24, 16)
-                deleteBtn:SetPoint("RIGHT", row, "RIGHT", -4, -11)
-                deleteBtn:SetText("Del")
+                -- Delete Red 'No' Circle Button (Replaces squished red button)
+                local deleteBtn = CreateFrame("Button", nil, row)
+                deleteBtn:SetSize(18, 18)
+                deleteBtn:SetPoint("RIGHT", row, "RIGHT", -4, 0)
+                deleteBtn:SetNormalTexture("Interface\\Buttons\\UI-GroupLoot-Pass-Up")
+                deleteBtn:SetPushedTexture("Interface\\Buttons\\UI-GroupLoot-Pass-Down")
+                deleteBtn:SetHighlightTexture("Interface\\Buttons\\UI-GroupLoot-Pass-Highlight", "ADD")
+                deleteBtn:SetScript("OnEnter", function(self)
+                    GameTooltip:SetOwner(self, "ANCHOR_RIGHT")
+                    GameTooltip:SetText("Delete Set", 1, 1, 1)
+                    GameTooltip:Show()
+                end)
+                deleteBtn:SetScript("OnLeave", GameTooltip_Hide)
                 row.DeleteBtn = deleteBtn
                 
                 outfitsContent.rows[idx] = row
@@ -1480,41 +1551,65 @@ local function CreateCharacterView(parentFrame)
             row.Icon:SetTexture(iconFileID or "Interface\\Icons\\INV_Misc_QuestionMark")
             row.NameText:SetText(name or ("Set " .. setID))
             
+            -- Selection Highlight
+            if setID == selectedSetID then
+                row.SelectedHighlight:Show()
+            else
+                row.SelectedHighlight:Hide()
+            end
+            
+            -- Equipped status
             if isEquipped then
                 row.StatusText:SetText("|cff00ff00Equipped|r")
-                row.EquipBtn:Disable()
+                row.Checkmark:Show()
             else
+                row.Checkmark:Hide()
                 local total = numItems or 16
                 local eq = numEquipped or 0
                 if numLost and numLost > 0 then
                     row.StatusText:SetText(string.format("|cffff4444%d Lost|r", numLost))
                 else
-                    row.StatusText:SetText(string.format("%d/%d Items", eq, total))
+                    row.StatusText:SetText(string.format("|cffaaaaaa%d/%d Items|r", eq, total))
                 end
-                row.EquipBtn:Enable()
             end
+            
+            -- Row Double-Click or Icon Click to Equip Set
+            local function EquipCurrent()
+                selectedSetID = setID
+                if C_EquipmentSet and C_EquipmentSet.UseEquipmentSet then
+                    C_EquipmentSet.UseEquipmentSet(setID)
+                end
+                RefreshEquipmentSets()
+            end
+            
+            -- Row Selection Handler (Single click selects, double click equips)
+            row:SetScript("OnClick", function(self)
+                local now = GetTime()
+                selectedSetID = setID
+                if self.lastClick and (now - self.lastClick) < 0.35 then
+                    self.lastClick = 0
+                    EquipCurrent()
+                else
+                    self.lastClick = now
+                    RefreshEquipmentSets()
+                end
+            end)
+            row.IconBtn:SetScript("OnClick", EquipCurrent)
             
             row.IconBtn:SetScript("OnEnter", function(self)
                 GameTooltip:SetOwner(self, "ANCHOR_RIGHT")
-                GameTooltip:SetText("Click to edit icon & name", 1, 1, 1)
+                GameTooltip:SetText(name or ("Set " .. setID), 1, 1, 1)
+                GameTooltip:AddLine("Click or double-click to equip", 0.8, 0.8, 0.8)
                 GameTooltip:Show()
             end)
-            row.IconBtn:SetScript("OnLeave", function() GameTooltip_Hide() end)
+            row.IconBtn:SetScript("OnLeave", GameTooltip_Hide)
             
-            row.IconBtn:SetScript("OnClick", function()
-                if ShowNewSetDialog then ShowNewSetDialog(name, iconFileID, setID) end
-            end)
-            
+            -- Edit Button Click
             row.EditBtn:SetScript("OnClick", function()
                 if ShowNewSetDialog then ShowNewSetDialog(name, iconFileID, setID) end
             end)
             
-            row.EquipBtn:SetScript("OnClick", function()
-                if C_EquipmentSet and C_EquipmentSet.UseEquipmentSet then
-                    C_EquipmentSet.UseEquipmentSet(setID)
-                end
-            end)
-            
+            -- Delete Button Click
             row.DeleteBtn:SetScript("OnClick", function()
                 if C_EquipmentSet and C_EquipmentSet.DeleteEquipmentSet then
                     StaticPopup_Show("ONEPANEL_CONFIRM_DELETE_SET", name, nil, setID)
@@ -1522,13 +1617,34 @@ local function CreateCharacterView(parentFrame)
             end)
             
             row:Show()
-            yOffset = yOffset - 48
+            yOffset = yOffset - 44
         end
         
         outfitsContent:SetHeight(math.abs(yOffset) + 30)
     end
     outfitsView.Refresh = RefreshEquipmentSets
     
+    -- Register Overwrite Set Confirmation Popup
+    if not StaticPopupDialogs["ONEPANEL_CONFIRM_OVERWRITE_SET"] then
+        StaticPopupDialogs["ONEPANEL_CONFIRM_OVERWRITE_SET"] = {
+            text = "Save current equipment to set '%s'?",
+            button1 = "Save",
+            button2 = "Cancel",
+            OnAccept = function(self, data)
+                if data and data.setID and C_EquipmentSet and C_EquipmentSet.SaveEquipmentSet then
+                    C_EquipmentSet.SaveEquipmentSet(data.setID, data.icon)
+                    if outfitsView and outfitsView.Refresh then
+                        outfitsView:Refresh()
+                    end
+                end
+            end,
+            timeout = 0,
+            whileDead = true,
+            hideOnEscape = true,
+            preferredIndex = 3,
+        }
+    end
+
     -- Register Delete Set Confirmation Popup
     if not StaticPopupDialogs["ONEPANEL_CONFIRM_DELETE_SET"] then
         StaticPopupDialogs["ONEPANEL_CONFIRM_DELETE_SET"] = {
@@ -1608,9 +1724,14 @@ local function CreateCharacterView(parentFrame)
         if not _G["OnePanel_NewSetDialog"] then
             local dlg = CreateFrame("Frame", "OnePanel_NewSetDialog", hostFrame)
             dlg:SetSize(360, 340)
+            dlg:EnableMouse(true)
             dlg:SetFrameStrata("DIALOG")
             dlg:SetFrameLevel(1000)
             dlg:SetPoint("TOPRIGHT", hostFrame, "TOPLEFT", -4, 0)
+            
+            local closeBtn = CreateFrame("Button", nil, dlg, "UIPanelCloseButton")
+            closeBtn:SetPoint("TOPRIGHT", dlg, "TOPRIGHT", -2, -2)
+            closeBtn:SetScript("OnClick", function() dlg:Hide() end)
             
             if Utils and Utils.FrameHelper then
                 Utils.FrameHelper:ApplyBackdrop(dlg,
@@ -1680,9 +1801,6 @@ local function CreateCharacterView(parentFrame)
                         if C_EquipmentSet and C_EquipmentSet.ModifyEquipmentSet then
                             pcall(C_EquipmentSet.ModifyEquipmentSet, dlg.existingSetID, setName, iconID)
                         end
-                        if C_EquipmentSet and C_EquipmentSet.SaveEquipmentSet then
-                            pcall(C_EquipmentSet.SaveEquipmentSet, dlg.existingSetID, iconID)
-                        end
                     else
                         if C_EquipmentSet and C_EquipmentSet.CreateEquipmentSet then
                             C_EquipmentSet.CreateEquipmentSet(setName, iconID)
@@ -1731,7 +1849,7 @@ local function CreateCharacterView(parentFrame)
             dlg.Title:SetText("Edit Equipment Set")
             dlg.SaveBtn:SetText("Save Changes")
         else
-            dlg.Title:SetText("Save Equipment Set")
+            dlg.Title:SetText("New Equipment Set")
             dlg.SaveBtn:SetText("Save Set")
         end
         
@@ -1805,11 +1923,25 @@ local function CreateCharacterView(parentFrame)
     end
     
     newSetBtn:SetScript("OnClick", function()
-        ShowNewSetDialog("")
+        if ShowNewSetDialog then
+            ShowNewSetDialog("")
+        end
     end)
-    saveCurrentBtn:SetScript("OnClick", function()
-        local name = GetEquippedSetName()
-        ShowNewSetDialog(name or "")
+    
+    equipBtn:SetScript("OnClick", function()
+        if selectedSetID and C_EquipmentSet and C_EquipmentSet.UseEquipmentSet then
+            C_EquipmentSet.UseEquipmentSet(selectedSetID)
+            if outfitsView and outfitsView.Refresh then
+                outfitsView:Refresh()
+            end
+        end
+    end)
+    
+    saveBtn:SetScript("OnClick", function()
+        if selectedSetID and C_EquipmentSet and C_EquipmentSet.GetEquipmentSetInfo then
+            local name, icon = C_EquipmentSet.GetEquipmentSetInfo(selectedSetID)
+            StaticPopup_Show("ONEPANEL_CONFIRM_OVERWRITE_SET", name or "", nil, { setID = selectedSetID, icon = icon })
+        end
     end)
     
     -- Register Equipment Set Events for Auto Refresh
@@ -1818,7 +1950,7 @@ local function CreateCharacterView(parentFrame)
     eqEventFrame:RegisterEvent("EQUIPMENT_SWAP_FINISHED")
     eqEventFrame:RegisterEvent("PLAYER_EQUIPMENT_CHANGED")
     eqEventFrame:SetScript("OnEvent", function()
-        if outfitsView and outfitsView.Refresh then
+        if outfitsView and outfitsView:IsVisible() and outfitsView.Refresh then
             pcall(outfitsView.Refresh)
         end
     end)
