@@ -2412,9 +2412,13 @@ end
 local isBuyingBack = false
 local isSellingConfirmed = false
 local lastBuybackCount = 0
+local confirmedSoldItemIDs = {}
 
-local function PrintProtectionMessage(msg)
-    if DEFAULT_CHAT_FRAME and DEFAULT_CHAT_FRAME.AddMessage then
+-- Target notifications to System Alert Window (UIErrorsFrame)
+local function ShowSystemAlertMessage(msg, r, g, b)
+    if UIErrorsFrame and UIErrorsFrame.AddMessage then
+        UIErrorsFrame:AddMessage(msg, r or 1.0, g or 0.1, b or 0.1, 1.0)
+    elseif DEFAULT_CHAT_FRAME and DEFAULT_CHAT_FRAME.AddMessage then
         DEFAULT_CHAT_FRAME:AddMessage(msg)
     elseif print then
         print(msg)
@@ -2466,11 +2470,11 @@ end
 -- Sell an item from bags when player explicitly confirmed via dialog
 local function SellConfirmedSetItem(targetItemID, targetItemLink, setName)
     if not (MerchantFrame and MerchantFrame:IsShown()) then
-        PrintProtectionMessage("|cffff2020[OnePanel]|r Cannot sell item: Merchant window is no longer open.")
+        ShowSystemAlertMessage("[OnePanel] Cannot sell item: Merchant window is no longer open.", 1.0, 0.1, 0.1)
         return
     end
     if InCombatLockdown and InCombatLockdown() then
-        PrintProtectionMessage("|cffff2020[OnePanel]|r Cannot sell item while in combat.")
+        ShowSystemAlertMessage("[OnePanel] Cannot sell item while in combat.", 1.0, 0.1, 0.1)
         return
     end
     
@@ -2499,6 +2503,12 @@ local function SellConfirmedSetItem(targetItemID, targetItemLink, setName)
     end
     
     if foundBag and foundSlot then
+        -- Record confirmation so async buyback checks recognize this item was intentionally sold
+        local numericID = tonumber(targetItemID)
+        if numericID then
+            confirmedSoldItemIDs[numericID] = (confirmedSoldItemIDs[numericID] or 0) + 1
+        end
+        
         isSellingConfirmed = true
         if C_Container and C_Container.UseContainerItem then
             pcall(C_Container.UseContainerItem, foundBag, foundSlot)
@@ -2506,10 +2516,11 @@ local function SellConfirmedSetItem(targetItemID, targetItemLink, setName)
             pcall(UseContainerItem, foundBag, foundSlot)
         end
         isSellingConfirmed = false
+        
         lastBuybackCount = (GetNumBuybackItems and GetNumBuybackItems()) or 0
-        PrintProtectionMessage(string.format("|cffffcc00[OnePanel]|r Sold %s (part of equipment set '%s').", targetItemLink or ("Item " .. tostring(targetItemID)), setName or ""))
+        ShowSystemAlertMessage(string.format("[OnePanel] Sold %s (equipment set '%s').", targetItemLink or ("Item " .. tostring(targetItemID)), setName or ""), 1.0, 0.82, 0.0)
     else
-        PrintProtectionMessage("|cffff2020[OnePanel]|r Could not find the item in your bags to sell.")
+        ShowSystemAlertMessage("[OnePanel] Could not find the item in your bags to sell.", 1.0, 0.1, 0.1)
     end
 end
 
@@ -2527,7 +2538,7 @@ if not StaticPopupDialogs["ONEPANEL_CONFIRM_SELL_SET_ITEM"] then
         OnCancel = function(self, data)
             if data and (data.itemLink or data.itemName) then
                 local name = data.itemLink or data.itemName or "Item"
-                PrintProtectionMessage(string.format("|cff20ff20[OnePanel]|r Sale cancelled: %s kept in bags.", name))
+                ShowSystemAlertMessage(string.format("[OnePanel] Sale cancelled: %s kept in bags.", name), 0.2, 1.0, 0.2)
             end
         end,
         timeout = 0,
@@ -2569,6 +2580,17 @@ local function CheckAndProtectSoldItems(forceCheckLastSlot)
         end
         
         if itemID then
+            local numericID = tonumber(itemID)
+            -- If user explicitly confirmed selling this item, allow it to remain sold
+            if numericID and confirmedSoldItemIDs[numericID] and confirmedSoldItemIDs[numericID] > 0 then
+                confirmedSoldItemIDs[numericID] = confirmedSoldItemIDs[numericID] - 1
+                if confirmedSoldItemIDs[numericID] <= 0 then
+                    confirmedSoldItemIDs[numericID] = nil
+                end
+                lastBuybackCount = (GetNumBuybackItems and GetNumBuybackItems()) or 0
+                return
+            end
+            
             local inSet, setNames = IsItemInEquipmentSet(itemID, itemLink)
             if inSet then
                 -- Instantly repurchase into bags
@@ -2589,7 +2611,7 @@ local function CheckAndProtectSoldItems(forceCheckLastSlot)
                     price = price,
                 })
                 
-                PrintProtectionMessage(string.format("|cffff2020[OnePanel]|r Protected: %s is part of equipment set '|cffffd100%s|r'. Confirmation required to sell.", displayName, setNames or "Equipment Set"))
+                ShowSystemAlertMessage(string.format("[OnePanel] Protected: %s is part of equipment set '%s'!", displayName, setNames or "Equipment Set"), 1.0, 0.2, 0.2)
                 return
             end
         end
@@ -2623,6 +2645,7 @@ local function InitVendorProtection()
     vendorFrame:SetScript("OnEvent", function(self, event)
         if event == "MERCHANT_SHOW" then
             lastBuybackCount = (GetNumBuybackItems and GetNumBuybackItems()) or 0
+            confirmedSoldItemIDs = {}
         elseif event == "MERCHANT_UPDATE" then
             local current = (GetNumBuybackItems and GetNumBuybackItems()) or 0
             if current > lastBuybackCount then
@@ -2632,6 +2655,7 @@ local function InitVendorProtection()
             end
         elseif event == "MERCHANT_CLOSED" then
             lastBuybackCount = 0
+            confirmedSoldItemIDs = {}
             if StaticPopup_Visible and StaticPopup_Visible("ONEPANEL_CONFIRM_SELL_SET_ITEM") then
                 StaticPopup_Hide("ONEPANEL_CONFIRM_SELL_SET_ITEM")
             end
