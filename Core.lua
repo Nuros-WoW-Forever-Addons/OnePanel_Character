@@ -50,6 +50,48 @@ local ResistanceSchools = {
 }
 
 -------------------------------------------------------------------------------
+-- Safe Item API Helpers
+-------------------------------------------------------------------------------
+
+local function SafeGetItemCount(itemID)
+    if not itemID then return 0 end
+    if C_Item and C_Item.GetItemCount then
+        local ok, count = pcall(C_Item.GetItemCount, itemID)
+        if ok and count then return count end
+    end
+    if GetItemCount then
+        local ok, count = pcall(GetItemCount, itemID)
+        if ok and count then return count end
+    end
+    return 0
+end
+
+local function SafeGetItemInfo(itemID)
+    if not itemID then return nil end
+    if C_Item and C_Item.GetItemInfo then
+        local ok, a, b, c, d, e, f, g, h, i, j = pcall(C_Item.GetItemInfo, itemID)
+        if ok and a then return a, b, c, d, e, f, g, h, i, j end
+    end
+    if GetItemInfo then
+        local ok, a, b, c, d, e, f, g, h, i, j = pcall(GetItemInfo, itemID)
+        if ok and a then return a, b, c, d, e, f, g, h, i, j end
+    end
+    return nil
+end
+
+local function SafeGetItemQualityColor(quality)
+    if C_Item and C_Item.GetItemQualityColor then
+        local ok, r, g, b, hex = pcall(C_Item.GetItemQualityColor, quality or 1)
+        if ok and r then return r, g, b, hex end
+    end
+    if GetItemQualityColor then
+        local ok, r, g, b, hex = pcall(GetItemQualityColor, quality or 1)
+        if ok and r then return r, g, b, hex end
+    end
+    return 1, 1, 1, "ffffffff"
+end
+
+-------------------------------------------------------------------------------
 -- Safe Stats Calculation Helper
 -------------------------------------------------------------------------------
 
@@ -1476,44 +1518,6 @@ local function CreateCharacterView(parentFrame)
         [19] = _G["TABARDSLOT"] or "Tabard",
     }
 
-    local function SafeGetItemCount(itemID)
-        if not itemID then return 0 end
-        if C_Item and C_Item.GetItemCount then
-            local ok, count = pcall(C_Item.GetItemCount, itemID)
-            if ok and count then return count end
-        end
-        if GetItemCount then
-            local ok, count = pcall(GetItemCount, itemID)
-            if ok and count then return count end
-        end
-        return 0
-    end
-
-    local function SafeGetItemInfo(itemID)
-        if not itemID then return nil end
-        if C_Item and C_Item.GetItemInfo then
-            local ok, a, b, c, d, e, f, g, h, i, j = pcall(C_Item.GetItemInfo, itemID)
-            if ok and a then return a, b, c, d, e, f, g, h, i, j end
-        end
-        if GetItemInfo then
-            local ok, a, b, c, d, e, f, g, h, i, j = pcall(GetItemInfo, itemID)
-            if ok and a then return a, b, c, d, e, f, g, h, i, j end
-        end
-        return nil
-    end
-
-    local function SafeGetItemQualityColor(quality)
-        if C_Item and C_Item.GetItemQualityColor then
-            local ok, r, g, b, hex = pcall(C_Item.GetItemQualityColor, quality or 1)
-            if ok and r then return r, g, b, hex end
-        end
-        if GetItemQualityColor then
-            local ok, r, g, b, hex = pcall(GetItemQualityColor, quality or 1)
-            if ok and r then return r, g, b, hex end
-        end
-        return 1, 1, 1, "ffffffff"
-    end
-
     local function GetSetItemStatus(setID)
         local name, iconFileID, _, isEquipped, numItems, numEquipped, numInInventory, numLost = C_EquipmentSet.GetEquipmentSetInfo(setID)
         
@@ -2401,6 +2405,241 @@ local function CreateCharacterView(parentFrame)
 end
 
 -------------------------------------------------------------------------------
+-- Equipment Set Vendor Protection
+-- Prevents accidental selling of items belonging to any saved equipment set.
+-------------------------------------------------------------------------------
+
+local isBuyingBack = false
+local isSellingConfirmed = false
+local lastBuybackCount = 0
+
+local function PrintProtectionMessage(msg)
+    if DEFAULT_CHAT_FRAME and DEFAULT_CHAT_FRAME.AddMessage then
+        DEFAULT_CHAT_FRAME:AddMessage(msg)
+    elseif print then
+        print(msg)
+    end
+end
+
+-- Check if an item (by itemID or itemLink) belongs to any equipment set
+local function GetItemEquipmentSets(targetItemID)
+    if not targetItemID or targetItemID <= 0 then return false, nil end
+    if not C_EquipmentSet or not C_EquipmentSet.GetEquipmentSetIDs then return false, nil end
+    
+    local okSets, setIDs = pcall(C_EquipmentSet.GetEquipmentSetIDs)
+    if not okSets or not setIDs or type(setIDs) ~= "table" then return false, nil end
+    
+    local matchingSets = {}
+    for _, setID in ipairs(setIDs) do
+        local okItems, itemIDs = pcall(C_EquipmentSet.GetItemIDs, setID)
+        if okItems and type(itemIDs) == "table" then
+            for slotID = 1, 19 do
+                local sItemID = itemIDs[slotID]
+                if sItemID and tonumber(sItemID) == targetItemID then
+                    local okInfo, setName = pcall(C_EquipmentSet.GetEquipmentSetInfo, setID)
+                    table.insert(matchingSets, (okInfo and setName) or ("Set " .. tostring(setID)))
+                    break
+                end
+            end
+        end
+    end
+    
+    if #matchingSets > 0 then
+        return true, table.concat(matchingSets, ", ")
+    end
+    return false, nil
+end
+
+local function IsItemInEquipmentSet(itemID, itemLink)
+    local targetID = tonumber(itemID)
+    if not targetID and itemLink then
+        targetID = tonumber(itemLink:match("item:(%d+)"))
+    end
+    if not targetID and itemLink and C_Item and C_Item.GetItemInfoInstant then
+        local ok, instantID = pcall(C_Item.GetItemInfoInstant, itemLink)
+        if ok and instantID then targetID = tonumber(instantID) end
+    end
+    if not targetID or targetID <= 0 then return false, nil end
+    return GetItemEquipmentSets(targetID)
+end
+
+-- Sell an item from bags when player explicitly confirmed via dialog
+local function SellConfirmedSetItem(targetItemID, targetItemLink, setName)
+    if not (MerchantFrame and MerchantFrame:IsShown()) then
+        PrintProtectionMessage("|cffff2020[OnePanel]|r Cannot sell item: Merchant window is no longer open.")
+        return
+    end
+    if InCombatLockdown and InCombatLockdown() then
+        PrintProtectionMessage("|cffff2020[OnePanel]|r Cannot sell item while in combat.")
+        return
+    end
+    
+    local numBags = (NUM_BAG_SLOTS or 4)
+    local foundBag, foundSlot = nil, nil
+    
+    for bagID = 0, numBags do
+        local numSlots = (C_Container and C_Container.GetContainerNumSlots and C_Container.GetContainerNumSlots(bagID)) 
+            or (GetContainerNumSlots and GetContainerNumSlots(bagID)) 
+            or 0
+        for slotIndex = 1, numSlots do
+            local itemID = (C_Container and C_Container.GetContainerItemID and C_Container.GetContainerItemID(bagID, slotIndex)) 
+                or (GetContainerItemID and GetContainerItemID(bagID, slotIndex))
+            local itemLink = (C_Container and C_Container.GetContainerItemLink and C_Container.GetContainerItemLink(bagID, slotIndex)) 
+                or (GetContainerItemLink and GetContainerItemLink(bagID, slotIndex))
+            
+            if targetItemLink and itemLink and (itemLink == targetItemLink) then
+                foundBag, foundSlot = bagID, slotIndex
+                break
+            elseif targetItemID and itemID and (tonumber(itemID) == tonumber(targetItemID)) then
+                foundBag, foundSlot = bagID, slotIndex
+                break
+            end
+        end
+        if foundBag then break end
+    end
+    
+    if foundBag and foundSlot then
+        isSellingConfirmed = true
+        if C_Container and C_Container.UseContainerItem then
+            pcall(C_Container.UseContainerItem, foundBag, foundSlot)
+        elseif UseContainerItem then
+            pcall(UseContainerItem, foundBag, foundSlot)
+        end
+        isSellingConfirmed = false
+        lastBuybackCount = (GetNumBuybackItems and GetNumBuybackItems()) or 0
+        PrintProtectionMessage(string.format("|cffffcc00[OnePanel]|r Sold %s (part of equipment set '%s').", targetItemLink or ("Item " .. tostring(targetItemID)), setName or ""))
+    else
+        PrintProtectionMessage("|cffff2020[OnePanel]|r Could not find the item in your bags to sell.")
+    end
+end
+
+-- Register StaticPopup Dialog for vendor confirmation
+if not StaticPopupDialogs["ONEPANEL_CONFIRM_SELL_SET_ITEM"] then
+    StaticPopupDialogs["ONEPANEL_CONFIRM_SELL_SET_ITEM"] = {
+        text = "|cffff2020Warning:|r %s is part of equipment set '|cffffd100%s|r'.\n\nAre you sure you want to sell it?",
+        button1 = "Sell",
+        button2 = "Cancel",
+        OnAccept = function(self, data)
+            if data and (data.itemID or data.itemLink) then
+                SellConfirmedSetItem(data.itemID, data.itemLink, data.setName)
+            end
+        end,
+        OnCancel = function(self, data)
+            if data and (data.itemLink or data.itemName) then
+                local name = data.itemLink or data.itemName or "Item"
+                PrintProtectionMessage(string.format("|cff20ff20[OnePanel]|r Sale cancelled: %s kept in bags.", name))
+            end
+        end,
+        timeout = 0,
+        whileDead = true,
+        hideOnEscape = true,
+        preferredIndex = 3,
+    }
+end
+
+-- Inspect buyback buffer for sold set items and immediately repurchase
+local function CheckAndProtectSoldItems(forceCheckLastSlot)
+    if isBuyingBack or isSellingConfirmed then return end
+    if not (MerchantFrame and MerchantFrame:IsShown()) then return end
+    if InCombatLockdown and InCombatLockdown() then return end
+    
+    local numBuyback = (GetNumBuybackItems and GetNumBuybackItems()) or 0
+    if numBuyback <= 0 then return end
+    
+    local startSlot = numBuyback
+    local endSlot = math.max(1, lastBuybackCount + 1)
+    
+    if (numBuyback <= lastBuybackCount) and not forceCheckLastSlot then
+        return
+    end
+    if endSlot > startSlot then
+        endSlot = startSlot
+    end
+    
+    for slot = startSlot, endSlot, -1 do
+        local itemLink = GetBuybackItemLink and GetBuybackItemLink(slot)
+        local itemName, _, price = GetBuybackItemInfo and GetBuybackItemInfo(slot)
+        local itemID = (C_MerchantFrame and C_MerchantFrame.GetBuybackItemID and C_MerchantFrame.GetBuybackItemID(slot))
+        if not itemID and itemLink then
+            itemID = tonumber(itemLink:match("item:(%d+)"))
+        end
+        if not itemID and itemName and C_Item and C_Item.GetItemInfoInstant then
+            local ok, instantID = pcall(C_Item.GetItemInfoInstant, itemName)
+            if ok and instantID then itemID = tonumber(instantID) end
+        end
+        
+        if itemID then
+            local inSet, setNames = IsItemInEquipmentSet(itemID, itemLink)
+            if inSet then
+                -- Instantly repurchase into bags
+                isBuyingBack = true
+                pcall(BuybackItem, slot)
+                isBuyingBack = false
+                
+                lastBuybackCount = (GetNumBuybackItems and GetNumBuybackItems()) or 0
+                
+                pcall(PlaySound, SOUNDKIT.RAID_WARNING or 8959)
+                
+                local displayName = itemLink or itemName or ("Item " .. tostring(itemID))
+                StaticPopup_Show("ONEPANEL_CONFIRM_SELL_SET_ITEM", displayName, setNames or "Equipment Set", {
+                    itemID = itemID,
+                    itemLink = itemLink,
+                    itemName = itemName,
+                    setName = setNames,
+                    price = price,
+                })
+                
+                PrintProtectionMessage(string.format("|cffff2020[OnePanel]|r Protected: %s is part of equipment set '|cffffd100%s|r'. Confirmation required to sell.", displayName, setNames or "Equipment Set"))
+                return
+            end
+        end
+    end
+    
+    lastBuybackCount = (GetNumBuybackItems and GetNumBuybackItems()) or 0
+end
+
+local function InitVendorProtection()
+    -- Hook bag item use functions (when right-clicking an item in bags at a merchant)
+    if C_Container and C_Container.UseContainerItem then
+        hooksecurefunc(C_Container, "UseContainerItem", function(bagID, slotIndex)
+            if MerchantFrame and MerchantFrame:IsShown() then
+                CheckAndProtectSoldItems(true)
+            end
+        end)
+    end
+    if UseContainerItem then
+        hooksecurefunc("UseContainerItem", function(bagID, slotIndex)
+            if MerchantFrame and MerchantFrame:IsShown() then
+                CheckAndProtectSoldItems(true)
+            end
+        end)
+    end
+    
+    -- Merchant event listener (covers drag-and-drop selling and general merchant updates)
+    local vendorFrame = CreateFrame("Frame", "OnePanel_VendorProtection_Frame")
+    vendorFrame:RegisterEvent("MERCHANT_SHOW")
+    vendorFrame:RegisterEvent("MERCHANT_UPDATE")
+    vendorFrame:RegisterEvent("MERCHANT_CLOSED")
+    vendorFrame:SetScript("OnEvent", function(self, event)
+        if event == "MERCHANT_SHOW" then
+            lastBuybackCount = (GetNumBuybackItems and GetNumBuybackItems()) or 0
+        elseif event == "MERCHANT_UPDATE" then
+            local current = (GetNumBuybackItems and GetNumBuybackItems()) or 0
+            if current > lastBuybackCount then
+                CheckAndProtectSoldItems(false)
+            elseif current < lastBuybackCount then
+                lastBuybackCount = current
+            end
+        elseif event == "MERCHANT_CLOSED" then
+            lastBuybackCount = 0
+            if StaticPopup_Visible and StaticPopup_Visible("ONEPANEL_CONFIRM_SELL_SET_ITEM") then
+                StaticPopup_Hide("ONEPANEL_CONFIRM_SELL_SET_ITEM")
+            end
+        end
+    end)
+end
+
+-------------------------------------------------------------------------------
 -- Plugin Registration
 -------------------------------------------------------------------------------
 
@@ -2455,5 +2694,6 @@ local eventFrame = CreateFrame("Frame", "OnePanel_Character_EventFrame")
 eventFrame:RegisterEvent("PLAYER_LOGIN")
 eventFrame:SetScript("OnEvent", function(self, event)
     RegisterPlugin()
+    InitVendorProtection()
     self:UnregisterEvent("PLAYER_LOGIN")
 end)
