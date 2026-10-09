@@ -1847,9 +1847,11 @@ local function CreateCharacterView(parentFrame)
         for id, btn in pairs(subPanel.tabButtons) do
             if id == targetTabId then
                 if btn.TabSelected then btn.TabSelected:Show() end
+                if btn.TabBorder then btn.TabBorder:SetVertexColor(0.95, 0.95, 1.0) end
                 if btn.Icon then btn.Icon:SetVertexColor(1, 1, 1, 1) end
             else
                 if btn.TabSelected then btn.TabSelected:Hide() end
+                if btn.TabBorder then btn.TabBorder:SetVertexColor(0.7, 0.7, 0.75) end
                 if btn.Icon then btn.Icon:SetVertexColor(0.6, 0.6, 0.6, 1) end
             end
         end
@@ -1895,6 +1897,10 @@ local function CreateCharacterView(parentFrame)
         if not setBorder or not tabBorder:GetTexture() then
             tabBorder:SetTexture(8175457)
         end
+        if tabBorder.SetDesaturated then
+            tabBorder:SetDesaturated(true)
+        end
+        tabBorder:SetVertexColor(0.85, 0.85, 0.95)
         tabBorder:SetAllPoints(btn)
         btn.TabBorder = tabBorder
         
@@ -1907,7 +1913,7 @@ local function CreateCharacterView(parentFrame)
         if tabSelected.SetDesaturated then
             tabSelected:SetDesaturated(true)
         end
-        tabSelected:SetVertexColor(0.85, 0.85, 0.95)
+        tabSelected:SetVertexColor(0.95, 0.95, 1.0)
         tabSelected:SetAllPoints(btn)
         tabSelected:Hide()
         btn.TabSelected = tabSelected
@@ -1915,6 +1921,10 @@ local function CreateCharacterView(parentFrame)
         -- Hover Highlight
         local tabHilight = btn:CreateTexture(nil, "HIGHLIGHT")
         tabHilight:SetTexture("Interface\\Buttons\\UI-Common-MouseHilight")
+        if tabHilight.SetDesaturated then
+            tabHilight:SetDesaturated(true)
+        end
+        tabHilight:SetVertexColor(0.9, 0.9, 1.0)
         tabHilight:SetAllPoints(btn)
         tabHilight:SetBlendMode("ADD")
         
