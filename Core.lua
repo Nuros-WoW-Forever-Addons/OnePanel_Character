@@ -1344,11 +1344,16 @@ local function CreateCharacterView(parentFrame)
     local selectedSetID = nil
     
     local function CreateSilverActionButton(parent, name, text)
+        local btn
         if Utils and Utils.FrameHelper and Utils.FrameHelper.CreateSilverButton then
-            return Utils.FrameHelper:CreateSilverButton(parent, name, text)
+            btn = Utils.FrameHelper:CreateSilverButton(parent, name, text)
+        else
+            btn = CreateFrame("Button", name, parent, "UIMenuButtonStretchTemplate")
+            if text then btn:SetText(text) end
+            if Utils and Utils.FrameHelper and Utils.FrameHelper.ApplyGunmetalButtonBackground then
+                Utils.FrameHelper:ApplyGunmetalButtonBackground(btn)
+            end
         end
-        local btn = CreateFrame("Button", name, parent, "UIMenuButtonStretchTemplate")
-        if text then btn:SetText(text) end
         return btn
     end
 
@@ -1377,13 +1382,32 @@ local function CreateCharacterView(parentFrame)
         self:SetVerticalScroll(math.max(0, math.min(maxScroll, cur - (delta * step))))
     end)
     
-    -- Custom ScrollBar Position
+    -- Custom ScrollBar Position (Top of scrollbar aligns with top of first set row)
     local outfitsSbName = outfitsScroll:GetName() .. "ScrollBar"
     local outfitsScrollBar = _G[outfitsSbName]
     if outfitsScrollBar then
         outfitsScrollBar:ClearAllPoints()
-        outfitsScrollBar:SetPoint("TOPRIGHT", outfitsView, "TOPRIGHT", -4, -58)
-        outfitsScrollBar:SetPoint("BOTTOMRIGHT", outfitsView, "BOTTOMRIGHT", -4, 18)
+        outfitsScrollBar:SetPoint("TOPRIGHT", outfitsScroll, "TOPRIGHT", -6, -18)
+        outfitsScrollBar:SetPoint("BOTTOMRIGHT", outfitsScroll, "BOTTOMRIGHT", -6, 18)
+        outfitsScrollBar:SetValueStep(28)
+        
+        local upBtn = _G[outfitsSbName .. "ScrollUpButton"]
+        local downBtn = _G[outfitsSbName .. "ScrollDownButton"]
+        if upBtn then
+            upBtn:SetScript("OnClick", function()
+                local cur = outfitsScroll:GetVerticalScroll()
+                local step = 28
+                outfitsScroll:SetVerticalScroll(math.max(0, cur - step))
+            end)
+        end
+        if downBtn then
+            downBtn:SetScript("OnClick", function()
+                local cur = outfitsScroll:GetVerticalScroll()
+                local maxScroll = outfitsScroll:GetVerticalScrollRange()
+                local step = 28
+                outfitsScroll:SetVerticalScroll(math.min(maxScroll, cur + step))
+            end)
+        end
     end
     
     local outfitsContent = CreateFrame("Frame", "OnePanel_OutfitsContent", outfitsScroll)
@@ -1814,16 +1838,15 @@ local function CreateCharacterView(parentFrame)
             input:SetScript("OnEnterPressed", PerformSave)
             input:SetScript("OnEscapePressed", function() dlg:Hide() end)
             
-            local saveBtn = CreateFrame("Button", "OnePanel_NewSetSaveBtn", dlg, "UIPanelButtonTemplate")
+            local saveBtn = CreateSilverActionButton(dlg, "OnePanel_NewSetSaveBtn", "Save Set")
             saveBtn:SetSize(110, 22)
             saveBtn:SetPoint("BOTTOMLEFT", dlg, "BOTTOMLEFT", 30, 12)
             dlg.SaveBtn = saveBtn
             saveBtn:SetScript("OnClick", PerformSave)
             
-            local cancelBtn = CreateFrame("Button", "OnePanel_NewSetCancelBtn", dlg, "UIPanelButtonTemplate")
+            local cancelBtn = CreateSilverActionButton(dlg, "OnePanel_NewSetCancelBtn", "Cancel")
             cancelBtn:SetSize(110, 22)
             cancelBtn:SetPoint("BOTTOMRIGHT", dlg, "BOTTOMRIGHT", -30, 12)
-            cancelBtn:SetText("Cancel")
             cancelBtn:SetScript("OnClick", function()
                 dlg:Hide()
             end)
