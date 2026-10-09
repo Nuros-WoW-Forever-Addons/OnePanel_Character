@@ -1348,10 +1348,12 @@ local function CreateCharacterView(parentFrame)
         if Utils and Utils.FrameHelper and Utils.FrameHelper.CreateSilverButton then
             btn = Utils.FrameHelper:CreateSilverButton(parent, name, text)
         else
-            btn = CreateFrame("Button", name, parent, "UIMenuButtonStretchTemplate")
+            btn = CreateFrame("Button", name, parent)
+            if btn.SetNormalFontObject then btn:SetNormalFontObject("GameFontHighlightSmall") end
+            if btn.SetDisabledFontObject then btn:SetDisabledFontObject("GameFontDisableSmall") end
             if text then btn:SetText(text) end
-            if Utils and Utils.FrameHelper and Utils.FrameHelper.ApplyGunmetalButtonBackground then
-                Utils.FrameHelper:ApplyGunmetalButtonBackground(btn)
+            if Utils and Utils.FrameHelper and Utils.FrameHelper.StyleButtonAsMetal then
+                Utils.FrameHelper:StyleButtonAsMetal(btn)
             end
         end
         return btn
