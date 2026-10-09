@@ -1904,6 +1904,10 @@ local function CreateCharacterView(parentFrame)
         if not setSelected or not tabSelected:GetTexture() then
             tabSelected:SetTexture(8175457)
         end
+        if tabSelected.SetDesaturated then
+            tabSelected:SetDesaturated(true)
+        end
+        tabSelected:SetVertexColor(0.85, 0.85, 0.95)
         tabSelected:SetAllPoints(btn)
         tabSelected:Hide()
         btn.TabSelected = tabSelected
