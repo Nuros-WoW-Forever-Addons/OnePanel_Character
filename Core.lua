@@ -1476,6 +1476,44 @@ local function CreateCharacterView(parentFrame)
         [19] = _G["TABARDSLOT"] or "Tabard",
     }
 
+    local function SafeGetItemCount(itemID)
+        if not itemID then return 0 end
+        if C_Item and C_Item.GetItemCount then
+            local ok, count = pcall(C_Item.GetItemCount, itemID)
+            if ok and count then return count end
+        end
+        if GetItemCount then
+            local ok, count = pcall(GetItemCount, itemID)
+            if ok and count then return count end
+        end
+        return 0
+    end
+
+    local function SafeGetItemInfo(itemID)
+        if not itemID then return nil end
+        if C_Item and C_Item.GetItemInfo then
+            local ok, a, b, c, d, e, f, g, h, i, j = pcall(C_Item.GetItemInfo, itemID)
+            if ok and a then return a, b, c, d, e, f, g, h, i, j end
+        end
+        if GetItemInfo then
+            local ok, a, b, c, d, e, f, g, h, i, j = pcall(GetItemInfo, itemID)
+            if ok and a then return a, b, c, d, e, f, g, h, i, j end
+        end
+        return nil
+    end
+
+    local function SafeGetItemQualityColor(quality)
+        if C_Item and C_Item.GetItemQualityColor then
+            local ok, r, g, b, hex = pcall(C_Item.GetItemQualityColor, quality or 1)
+            if ok and r then return r, g, b, hex end
+        end
+        if GetItemQualityColor then
+            local ok, r, g, b, hex = pcall(GetItemQualityColor, quality or 1)
+            if ok and r then return r, g, b, hex end
+        end
+        return 1, 1, 1, "ffffffff"
+    end
+
     local function GetSetItemStatus(setID)
         local name, iconFileID, _, isEquipped, numItems, numEquipped, numInInventory, numLost = C_EquipmentSet.GetEquipmentSetInfo(setID)
         
@@ -1494,7 +1532,7 @@ local function CreateCharacterView(parentFrame)
                 local loc = locations[slotID]
                 local isMissing = false
                 
-                local ownedCount = GetItemCount(itemID) or 0
+                local ownedCount = SafeGetItemCount(itemID)
                 local used = usedCounts[itemID] or 0
                 
                 -- Check if item is missing (-1 in locations, or player doesn't have enough copies in bags/equipment)
@@ -1505,9 +1543,9 @@ local function CreateCharacterView(parentFrame)
                 end
                 
                 if isMissing then
-                    local itemName, itemLink, itemQuality, _, _, _, _, _, _, itemTexture = GetItemInfo(itemID)
+                    local itemName, itemLink, itemQuality, _, _, _, _, _, _, itemTexture = SafeGetItemInfo(itemID)
                     if not itemName and C_Item and C_Item.RequestLoadItemDataByID then
-                        C_Item.RequestLoadItemDataByID(itemID)
+                        pcall(C_Item.RequestLoadItemDataByID, itemID)
                     end
                     table.insert(missingList, {
                         slotID = slotID,
@@ -1572,7 +1610,15 @@ local function CreateCharacterView(parentFrame)
         end
         
         for idx, setID in ipairs(setIDs) do
-            local totalCount, availableCount, missingList, isEquipped, name, iconFileID = GetSetItemStatus(setID)
+            local ok, totalCount, availableCount, missingList, isEquipped, name, iconFileID = pcall(GetSetItemStatus, setID)
+            if not ok or not totalCount then
+                if C_EquipmentSet and C_EquipmentSet.GetEquipmentSetInfo then
+                    name, iconFileID, _, isEquipped = C_EquipmentSet.GetEquipmentSetInfo(setID)
+                end
+                totalCount = 16
+                availableCount = 16
+                missingList = {}
+            end
             
             local row = outfitsContent.rows[idx]
             if not row then
@@ -1710,7 +1756,7 @@ local function CreateCharacterView(parentFrame)
                             local itemDisplayName = item.link
                             if not itemDisplayName then
                                 if item.name then
-                                    local _, _, _, hex = GetItemQualityColor(item.quality or 1)
+                                    local _, _, _, hex = SafeGetItemQualityColor(item.quality or 1)
                                     itemDisplayName = hex and ("|c" .. hex .. item.name .. "|r") or item.name
                                 else
                                     itemDisplayName = "|cffffffffItem #" .. item.itemID .. "|r"
@@ -1802,7 +1848,7 @@ local function CreateCharacterView(parentFrame)
                 if data and data.setID and C_EquipmentSet and C_EquipmentSet.SaveEquipmentSet then
                     pcall(C_EquipmentSet.SaveEquipmentSet, data.setID, data.icon)
                     if outfitsView and outfitsView.Refresh then
-                        outfitsView:Refresh()
+                        pcall(outfitsView.Refresh)
                     end
                 end
             end,
