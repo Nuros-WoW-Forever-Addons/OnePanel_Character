@@ -92,6 +92,194 @@ local function SafeGetItemQualityColor(quality)
 end
 
 -------------------------------------------------------------------------------
+-- UI & System Alert Helpers
+-------------------------------------------------------------------------------
+
+local function ShowSystemAlertMessage(msg, r, g, b)
+    if UIErrorsFrame and UIErrorsFrame.AddMessage then
+        UIErrorsFrame:AddMessage(msg, r or 1.0, g or 0.1, b or 0.1, 1.0)
+    elseif DEFAULT_CHAT_FRAME and DEFAULT_CHAT_FRAME.AddMessage then
+        DEFAULT_CHAT_FRAME:AddMessage(msg)
+    elseif print then
+        print(msg)
+    end
+end
+
+local function CreateSilverActionButton(parent, name, text)
+    local btn
+    if Utils and Utils.FrameHelper and Utils.FrameHelper.CreateSilverButton then
+        btn = Utils.FrameHelper:CreateSilverButton(parent, name, text)
+    else
+        btn = CreateFrame("Button", name, parent)
+        if btn.SetNormalFontObject then btn:SetNormalFontObject("GameFontHighlightSmall") end
+        if btn.SetDisabledFontObject then btn:SetDisabledFontObject("GameFontDisableSmall") end
+        if text then btn:SetText(text) end
+        if Utils and Utils.FrameHelper and Utils.FrameHelper.StyleButtonAsMetal then
+            Utils.FrameHelper:StyleButtonAsMetal(btn)
+        end
+    end
+    return btn
+end
+
+-------------------------------------------------------------------------------
+-- Reusable Silver/Metal Confirmation Dialog
+-------------------------------------------------------------------------------
+
+local function GetOrCreateMetalConfirmDialog()
+    if _G["OnePanel_ConfirmDialog"] then
+        return _G["OnePanel_ConfirmDialog"]
+    end
+    
+    local dlg = CreateFrame("Frame", "OnePanel_ConfirmDialog", UIParent)
+    dlg:SetSize(360, 140)
+    dlg:SetPoint("CENTER", UIParent, "CENTER", 0, 80)
+    dlg:EnableMouse(true)
+    dlg:SetMovable(true)
+    dlg:RegisterForDrag("LeftButton")
+    dlg:SetScript("OnDragStart", dlg.StartMoving)
+    dlg:SetScript("OnDragStop", dlg.StopMovingOrSizing)
+    dlg:SetClampedToScreen(true)
+    dlg:SetFrameStrata("DIALOG")
+    dlg:SetFrameLevel(1100)
+    
+    tinsert(UISpecialFrames, "OnePanel_ConfirmDialog")
+    
+    if Utils and Utils.FrameHelper then
+        Utils.FrameHelper:ApplyBackdrop(dlg,
+            "Interface\\FrameGeneral\\UI-Background-Marble",
+            "Interface\\Tooltips\\UI-Tooltip-Border",
+            16, 16, { left = 4, right = 4, top = 4, bottom = 4 }
+        )
+    end
+    if dlg.SetBackdropColor then
+        dlg:SetBackdropColor(0.12, 0.12, 0.14, 0.95)
+    end
+    if dlg.SetBackdropBorderColor then
+        dlg:SetBackdropBorderColor(0.8, 0.8, 0.85, 1.0)
+    end
+    
+    -- Title Header Strip
+    local titleBg = dlg:CreateTexture(nil, "ARTWORK")
+    titleBg:SetHeight(24)
+    titleBg:SetPoint("TOPLEFT", dlg, "TOPLEFT", 4, -4)
+    titleBg:SetPoint("TOPRIGHT", dlg, "TOPRIGHT", -4, -4)
+    titleBg:SetColorTexture(0.08, 0.08, 0.1, 0.75)
+    dlg.TitleBg = titleBg
+    
+    local dlgTitle = dlg:CreateFontString(nil, "OVERLAY", "GameFontHighlight")
+    dlgTitle:SetPoint("CENTER", titleBg, "CENTER", 0, 0)
+    dlg.Title = dlgTitle
+    
+    -- Close button (X)
+    local closeBtn = CreateFrame("Button", nil, dlg, "UIPanelCloseButton")
+    closeBtn:SetPoint("TOPRIGHT", dlg, "TOPRIGHT", -2, -2)
+    closeBtn:SetScript("OnClick", function()
+        dlg:Hide()
+    end)
+    dlg.CloseBtn = closeBtn
+    
+    -- Message text
+    local msgText = dlg:CreateFontString(nil, "OVERLAY", "GameFontHighlight")
+    msgText:SetPoint("TOPLEFT", dlg, "TOPLEFT", 20, -34)
+    msgText:SetPoint("BOTTOMRIGHT", dlg, "BOTTOMRIGHT", -20, 44)
+    msgText:SetJustifyH("CENTER")
+    msgText:SetJustifyV("MIDDLE")
+    msgText:SetWordWrap(true)
+    dlg.MsgText = msgText
+    
+    -- Action buttons (Metal / Silver styled)
+    local acceptBtn = CreateSilverActionButton(dlg, "OnePanel_ConfirmDialogAcceptBtn", "Accept")
+    acceptBtn:SetSize(110, 22)
+    acceptBtn:SetPoint("BOTTOMLEFT", dlg, "BOTTOMLEFT", 40, 14)
+    acceptBtn:SetScript("OnClick", function()
+        dlg.actionTaken = true
+        local cb = dlg.onAccept
+        local data = dlg.data
+        dlg.onAccept = nil
+        dlg.onCancel = nil
+        dlg:Hide()
+        if cb then pcall(cb, data) end
+    end)
+    dlg.AcceptBtn = acceptBtn
+    
+    local cancelBtn = CreateSilverActionButton(dlg, "OnePanel_ConfirmDialogCancelBtn", "Cancel")
+    cancelBtn:SetSize(110, 22)
+    cancelBtn:SetPoint("BOTTOMRIGHT", dlg, "BOTTOMRIGHT", -40, 14)
+    cancelBtn:SetScript("OnClick", function()
+        dlg.actionTaken = true
+        local cb = dlg.onCancel
+        local data = dlg.data
+        dlg.onAccept = nil
+        dlg.onCancel = nil
+        dlg:Hide()
+        if cb then pcall(cb, data) end
+    end)
+    dlg.CancelBtn = cancelBtn
+    
+    dlg:SetScript("OnHide", function(self)
+        if not self.actionTaken then
+            self.actionTaken = true
+            local cb = self.onCancel
+            local data = self.data
+            self.onAccept = nil
+            self.onCancel = nil
+            if cb then pcall(cb, data) end
+        end
+    end)
+    
+    return dlg
+end
+
+local function ShowMetalConfirmDialog(options)
+    if not options then return end
+    local dlg = GetOrCreateMetalConfirmDialog()
+    
+    if dlg:IsShown() and not dlg.actionTaken and dlg.onCancel then
+        local oldCancel = dlg.onCancel
+        local oldData = dlg.data
+        dlg.onCancel = nil
+        pcall(oldCancel, oldData)
+    end
+    
+    dlg.dialogType = options.dialogType
+    dlg.data = options.data
+    dlg.onAccept = options.onAccept
+    dlg.onCancel = options.onCancel
+    dlg.actionTaken = false
+    
+    dlg.Title:SetText(options.title or "Confirmation")
+    
+    local width = options.width or 360
+    dlg:SetWidth(width)
+    dlg.MsgText:SetWidth(width - 40)
+    dlg.MsgText:SetText(options.text or "")
+    
+    dlg.AcceptBtn:SetText(options.acceptText or "Accept")
+    dlg.CancelBtn:SetText(options.cancelText or "Cancel")
+    
+    if options.singleButton then
+        dlg.CancelBtn:Hide()
+        dlg.AcceptBtn:ClearAllPoints()
+        dlg.AcceptBtn:SetPoint("BOTTOM", dlg, "BOTTOM", 0, 14)
+    else
+        dlg.CancelBtn:Show()
+        dlg.AcceptBtn:ClearAllPoints()
+        dlg.AcceptBtn:SetPoint("BOTTOMLEFT", dlg, "BOTTOMLEFT", 40, 14)
+    end
+    
+    local textHeight = dlg.MsgText:GetStringHeight() or 24
+    if textHeight < 24 then textHeight = 24 end
+    local requiredHeight = math.max(130, 34 + textHeight + 44 + 16)
+    dlg:SetHeight(requiredHeight)
+    
+    dlg:ClearAllPoints()
+    dlg:SetPoint("CENTER", UIParent, "CENTER", 0, 80)
+    
+    dlg:Show()
+    dlg:Raise()
+end
+
+-------------------------------------------------------------------------------
 -- Safe Stats Calculation Helper
 -------------------------------------------------------------------------------
 
@@ -1384,22 +1572,6 @@ local function CreateCharacterView(parentFrame)
     
     -- Selected Set ID State for Top Action Controls
     local selectedSetID = nil
-    
-    local function CreateSilverActionButton(parent, name, text)
-        local btn
-        if Utils and Utils.FrameHelper and Utils.FrameHelper.CreateSilverButton then
-            btn = Utils.FrameHelper:CreateSilverButton(parent, name, text)
-        else
-            btn = CreateFrame("Button", name, parent)
-            if btn.SetNormalFontObject then btn:SetNormalFontObject("GameFontHighlightSmall") end
-            if btn.SetDisabledFontObject then btn:SetDisabledFontObject("GameFontDisableSmall") end
-            if text then btn:SetText(text) end
-            if Utils and Utils.FrameHelper and Utils.FrameHelper.StyleButtonAsMetal then
-                Utils.FrameHelper:StyleButtonAsMetal(btn)
-            end
-        end
-        return btn
-    end
 
     -- Top Action Buttons (Row 1: + New Set / Row 2: Equip & Save)
     local newSetBtn = CreateSilverActionButton(outfitsView, "OnePanel_NewSetBtn", "+ New Set")
@@ -1830,7 +2002,25 @@ local function CreateCharacterView(parentFrame)
             -- Delete Button Click
             row.DeleteBtn:SetScript("OnClick", function()
                 if C_EquipmentSet and C_EquipmentSet.DeleteEquipmentSet then
-                    StaticPopup_Show("ONEPANEL_CONFIRM_DELETE_SET", name, nil, setID)
+                    local currentSetID = setID
+                    local currentName = name
+                    ShowMetalConfirmDialog({
+                        dialogType = "CONFIRM_DELETE_SET",
+                        title = "Delete Equipment Set",
+                        text = string.format("Delete equipment set '|cffffd100%s|r'?", currentName or ""),
+                        acceptText = "Delete",
+                        cancelText = "Cancel",
+                        data = currentSetID,
+                        onAccept = function(data)
+                            if data and C_EquipmentSet and C_EquipmentSet.DeleteEquipmentSet then
+                                pcall(C_EquipmentSet.DeleteEquipmentSet, data)
+                                if outfitsView and outfitsView.Refresh then
+                                    pcall(outfitsView.Refresh)
+                                end
+                                ShowSystemAlertMessage(string.format("[OnePanel] Equipment set '%s' deleted.", currentName or ""), 1.0, 0.82, 0.0)
+                            end
+                        end,
+                    })
                 end
             end)
             
@@ -1841,45 +2031,6 @@ local function CreateCharacterView(parentFrame)
         outfitsContent:SetHeight(math.abs(yOffset) + 30)
     end
     outfitsView.Refresh = RefreshEquipmentSets
-    
-    -- Register Overwrite Set Confirmation Popup
-    if not StaticPopupDialogs["ONEPANEL_CONFIRM_OVERWRITE_SET"] then
-        StaticPopupDialogs["ONEPANEL_CONFIRM_OVERWRITE_SET"] = {
-            text = "Save current equipment to set '%s'?",
-            button1 = "Save",
-            button2 = "Cancel",
-            OnAccept = function(self, data)
-                if data and data.setID and C_EquipmentSet and C_EquipmentSet.SaveEquipmentSet then
-                    pcall(C_EquipmentSet.SaveEquipmentSet, data.setID, data.icon)
-                    if outfitsView and outfitsView.Refresh then
-                        pcall(outfitsView.Refresh)
-                    end
-                end
-            end,
-            timeout = 0,
-            whileDead = true,
-            hideOnEscape = true,
-            preferredIndex = 3,
-        }
-    end
-
-    -- Register Delete Set Confirmation Popup
-    if not StaticPopupDialogs["ONEPANEL_CONFIRM_DELETE_SET"] then
-        StaticPopupDialogs["ONEPANEL_CONFIRM_DELETE_SET"] = {
-            text = "Delete equipment set '%s'?",
-            button1 = "Delete",
-            button2 = "Cancel",
-            OnAccept = function(self, data)
-                if data and C_EquipmentSet and C_EquipmentSet.DeleteEquipmentSet then
-                    pcall(C_EquipmentSet.DeleteEquipmentSet, data)
-                end
-            end,
-            timeout = 0,
-            whileDead = true,
-            hideOnEscape = true,
-            preferredIndex = 3,
-        }
-    end
     
     local function GetDefaultSetIcon()
         local prioritySlots = { 16, 17, 18, 1, 3, 5, 7, 10, 6, 8, 2, 15, 4, 19, 9, 11, 12, 13, 14 }
@@ -2161,7 +2312,23 @@ local function CreateCharacterView(parentFrame)
     saveBtn:SetScript("OnClick", function()
         if selectedSetID and C_EquipmentSet and C_EquipmentSet.GetEquipmentSetInfo then
             local name, icon = C_EquipmentSet.GetEquipmentSetInfo(selectedSetID)
-            StaticPopup_Show("ONEPANEL_CONFIRM_OVERWRITE_SET", name or "", nil, { setID = selectedSetID, icon = icon })
+            ShowMetalConfirmDialog({
+                dialogType = "CONFIRM_OVERWRITE_SET",
+                title = "Save Equipment Set",
+                text = string.format("Save current equipment to set '|cffffd100%s|r'?", name or ""),
+                acceptText = "Save",
+                cancelText = "Cancel",
+                data = { setID = selectedSetID, icon = icon },
+                onAccept = function(data)
+                    if data and data.setID and C_EquipmentSet and C_EquipmentSet.SaveEquipmentSet then
+                        pcall(C_EquipmentSet.SaveEquipmentSet, data.setID, data.icon)
+                        if outfitsView and outfitsView.Refresh then
+                            pcall(outfitsView.Refresh)
+                        end
+                        ShowSystemAlertMessage(string.format("[OnePanel] Equipment set '%s' saved.", name or ""), 0.2, 1.0, 0.2)
+                    end
+                end,
+            })
         end
     end)
     
@@ -2414,17 +2581,6 @@ local isSellingConfirmed = false
 local lastBuybackCount = 0
 local confirmedSoldItemIDs = {}
 
--- Target notifications to System Alert Window (UIErrorsFrame)
-local function ShowSystemAlertMessage(msg, r, g, b)
-    if UIErrorsFrame and UIErrorsFrame.AddMessage then
-        UIErrorsFrame:AddMessage(msg, r or 1.0, g or 0.1, b or 0.1, 1.0)
-    elseif DEFAULT_CHAT_FRAME and DEFAULT_CHAT_FRAME.AddMessage then
-        DEFAULT_CHAT_FRAME:AddMessage(msg)
-    elseif print then
-        print(msg)
-    end
-end
-
 -- Check if an item (by itemID or itemLink) belongs to any equipment set
 local function GetItemEquipmentSets(targetItemID)
     if not targetItemID or targetItemID <= 0 then return false, nil end
@@ -2524,30 +2680,6 @@ local function SellConfirmedSetItem(targetItemID, targetItemLink, setName)
     end
 end
 
--- Register StaticPopup Dialog for vendor confirmation
-if not StaticPopupDialogs["ONEPANEL_CONFIRM_SELL_SET_ITEM"] then
-    StaticPopupDialogs["ONEPANEL_CONFIRM_SELL_SET_ITEM"] = {
-        text = "|cffff2020Warning:|r %s is part of equipment set '|cffffd100%s|r'.\n\nAre you sure you want to sell it?",
-        button1 = "Sell",
-        button2 = "Cancel",
-        OnAccept = function(self, data)
-            if data and (data.itemID or data.itemLink) then
-                SellConfirmedSetItem(data.itemID, data.itemLink, data.setName)
-            end
-        end,
-        OnCancel = function(self, data)
-            if data and (data.itemLink or data.itemName) then
-                local name = data.itemLink or data.itemName or "Item"
-                ShowSystemAlertMessage(string.format("[OnePanel] Sale cancelled: %s kept in bags.", name), 0.2, 1.0, 0.2)
-            end
-        end,
-        timeout = 0,
-        whileDead = true,
-        hideOnEscape = true,
-        preferredIndex = 3,
-    }
-end
-
 -- Inspect buyback buffer for sold set items and immediately repurchase
 local function CheckAndProtectSoldItems(forceCheckLastSlot)
     if isBuyingBack or isSellingConfirmed then return end
@@ -2603,12 +2735,30 @@ local function CheckAndProtectSoldItems(forceCheckLastSlot)
                 pcall(PlaySound, SOUNDKIT.RAID_WARNING or 8959)
                 
                 local displayName = itemLink or itemName or ("Item " .. tostring(itemID))
-                StaticPopup_Show("ONEPANEL_CONFIRM_SELL_SET_ITEM", displayName, setNames or "Equipment Set", {
-                    itemID = itemID,
-                    itemLink = itemLink,
-                    itemName = itemName,
-                    setName = setNames,
-                    price = price,
+                ShowMetalConfirmDialog({
+                    dialogType = "CONFIRM_SELL_SET_ITEM",
+                    title = "Confirm Sale",
+                    text = string.format("|cffff2020Warning:|r %s is part of equipment set '|cffffd100%s|r'.\n\nAre you sure you want to sell it?", displayName, setNames or "Equipment Set"),
+                    acceptText = "Sell",
+                    cancelText = "Cancel",
+                    data = {
+                        itemID = itemID,
+                        itemLink = itemLink,
+                        itemName = itemName,
+                        setName = setNames,
+                        price = price,
+                    },
+                    onAccept = function(data)
+                        if data and (data.itemID or data.itemLink) then
+                            SellConfirmedSetItem(data.itemID, data.itemLink, data.setName)
+                        end
+                    end,
+                    onCancel = function(data)
+                        if data and (data.itemLink or data.itemName) then
+                            local name = data.itemLink or data.itemName or "Item"
+                            ShowSystemAlertMessage(string.format("[OnePanel] Sale cancelled: %s kept in bags.", name), 0.2, 1.0, 0.2)
+                        end
+                    end,
                 })
                 
                 ShowSystemAlertMessage(string.format("[OnePanel] Protected: %s is part of equipment set '%s'!", displayName, setNames or "Equipment Set"), 1.0, 0.2, 0.2)
@@ -2656,8 +2806,10 @@ local function InitVendorProtection()
         elseif event == "MERCHANT_CLOSED" then
             lastBuybackCount = 0
             confirmedSoldItemIDs = {}
-            if StaticPopup_Visible and StaticPopup_Visible("ONEPANEL_CONFIRM_SELL_SET_ITEM") then
-                StaticPopup_Hide("ONEPANEL_CONFIRM_SELL_SET_ITEM")
+            if _G["OnePanel_ConfirmDialog"] and _G["OnePanel_ConfirmDialog"]:IsShown() then
+                if _G["OnePanel_ConfirmDialog"].dialogType == "CONFIRM_SELL_SET_ITEM" then
+                    _G["OnePanel_ConfirmDialog"]:Hide()
+                end
             end
         end
     end)
@@ -2709,6 +2861,11 @@ local function RegisterPlugin()
             end
             if _G["OnePanel_EquipmentFlyout"] then
                 _G["OnePanel_EquipmentFlyout"]:Hide()
+            end
+            if _G["OnePanel_ConfirmDialog"] and _G["OnePanel_ConfirmDialog"]:IsShown() then
+                if _G["OnePanel_ConfirmDialog"].dialogType ~= "CONFIRM_SELL_SET_ITEM" then
+                    _G["OnePanel_ConfirmDialog"]:Hide()
+                end
             end
         end
     })
