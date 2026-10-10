@@ -76,13 +76,13 @@ local IGNORE_SLOT_FALLBACK = "Interface\\Buttons\\UI-GroupLoot-Pass-Up"
 
 local function SetIgnoreSlotTexture(tex)
     if not tex then return end
-    local ok = pcall(function() tex:SetTexture(IGNORE_SLOT_ICON) end)
-    if not ok or not tex:GetTexture() then
-        local ok2 = pcall(function() tex:SetTexture(136511) end)
-        if not ok2 or not tex:GetTexture() then
+    tex:SetTexture(IGNORE_SLOT_FALLBACK)
+    pcall(function()
+        tex:SetTexture(IGNORE_SLOT_ICON)
+        if not tex:GetTexture() then
             tex:SetTexture(IGNORE_SLOT_FALLBACK)
         end
-    end
+    end)
 end
 
 -------------------------------------------------------------------------------
@@ -724,49 +724,41 @@ local function CreateCharacterView(parentFrame)
     local outfitsView = nil
     local pendingIgnoredSlots = {}
 
+    local function UpdateSlotBadges()
+        if not container or not container.slots then return end
+        for slotId, btn in pairs(container.slots) do
+            if btn.IgnoreBadge then
+                btn.IgnoreBadge:SetShown(pendingIgnoredSlots[slotId] == true)
+            end
+        end
+    end
+
     local function LoadIgnoredSlotsForSet(setID)
         pendingIgnoredSlots = {}
-        if C_EquipmentSet and C_EquipmentSet.ClearIgnoredSlotsForSave then
-            pcall(C_EquipmentSet.ClearIgnoredSlotsForSave)
-        end
         if setID and C_EquipmentSet and C_EquipmentSet.GetIgnoredSlots then
             local ok, ignored = pcall(C_EquipmentSet.GetIgnoredSlots, setID)
             if ok and type(ignored) == "table" then
                 for k, v in pairs(ignored) do
                     local slotKey = tonumber(k)
-                    if slotKey and slotKey >= 1 and slotKey <= 19 and v == true then
+                    if v == true and slotKey and slotKey >= 1 and slotKey <= 19 then
                         pendingIgnoredSlots[slotKey] = true
-                        if C_EquipmentSet.IgnoreSlotForSave then
-                            pcall(C_EquipmentSet.IgnoreSlotForSave, slotKey)
-                        end
                     elseif type(v) == "number" and v >= 1 and v <= 19 then
                         pendingIgnoredSlots[v] = true
-                        if C_EquipmentSet.IgnoreSlotForSave then
-                            pcall(C_EquipmentSet.IgnoreSlotForSave, v)
-                        end
                     end
                 end
             end
         end
-        if container and container.UpdateEquipment then
-            container:UpdateEquipment()
-        end
+        UpdateSlotBadges()
     end
 
     local function ApplyPendingIgnoredSlotsForSave()
         if C_EquipmentSet and C_EquipmentSet.ClearIgnoredSlotsForSave then
             pcall(C_EquipmentSet.ClearIgnoredSlotsForSave)
         end
-        if C_EquipmentSet then
-            for sID = 1, 19 do
-                if pendingIgnoredSlots[sID] then
-                    if C_EquipmentSet.IgnoreSlotForSave then
-                        pcall(C_EquipmentSet.IgnoreSlotForSave, sID)
-                    end
-                else
-                    if C_EquipmentSet.UnignoreSlotForSave then
-                        pcall(C_EquipmentSet.UnignoreSlotForSave, sID)
-                    end
+        if C_EquipmentSet and C_EquipmentSet.IgnoreSlotForSave then
+            for sID, isIgnored in pairs(pendingIgnoredSlots) do
+                if isIgnored and type(sID) == "number" and sID >= 1 and sID <= 19 then
+                    pcall(C_EquipmentSet.IgnoreSlotForSave, sID)
                 end
             end
         end
@@ -776,21 +768,13 @@ local function CreateCharacterView(parentFrame)
         local displayName = (SLOT_NAMES and SLOT_NAMES[slotID]) or slotName or ("Slot " .. tostring(slotID))
         if pendingIgnoredSlots[slotID] then
             pendingIgnoredSlots[slotID] = nil
-            if C_EquipmentSet and C_EquipmentSet.UnignoreSlotForSave then
-                pcall(C_EquipmentSet.UnignoreSlotForSave, slotID)
-            end
             ShowSystemAlertMessage(string.format("[OnePanel] Slot '%s' will be included in equipment sets.", displayName), 0.2, 1.0, 0.2)
         else
             pendingIgnoredSlots[slotID] = true
-            if C_EquipmentSet and C_EquipmentSet.IgnoreSlotForSave then
-                pcall(C_EquipmentSet.IgnoreSlotForSave, slotID)
-            end
             ShowSystemAlertMessage(string.format("[OnePanel] Slot '%s' excluded from equipment sets.", displayName), 1.0, 0.4, 0.4)
         end
         
-        if container and container.UpdateEquipment then
-            container:UpdateEquipment()
-        end
+        UpdateSlotBadges()
         if outfitsView and outfitsView.Refresh then
             pcall(outfitsView.Refresh)
         end
@@ -1014,7 +998,7 @@ local function CreateCharacterView(parentFrame)
             table.insert(flyoutButtons, {
                 isUnequip = true,
                 name = "Place In Bags",
-                texture = 255351,
+                texture = "Interface\\PaperDollInfoFrame\\UI-GearManager-ItemIntoBag",
             })
         end
         
@@ -1153,7 +1137,10 @@ local function CreateCharacterView(parentFrame)
                 btn:SetScript("OnLeave", function() GameTooltip_Hide() end)
                 btn:SetScript("OnClick", function() flyout:Hide() end)
             elseif entry.isUnequip then
-                btn.Icon:SetTexture(255351)
+                btn.Icon:SetTexture("Interface\\PaperDollInfoFrame\\UI-GearManager-ItemIntoBag")
+                if not btn.Icon:GetTexture() then
+                    btn.Icon:SetTexture("Interface\\Buttons\\UI-GroupLoot-Pass-Up")
+                end
                 btn.Icon:SetDesaturated(false)
                 btn.Icon:SetVertexColor(1, 1, 1, 1)
                 btn.Border:Hide()
@@ -1223,9 +1210,7 @@ local function CreateCharacterView(parentFrame)
                 btn:SetScript("OnLeave", function() GameTooltip_Hide() end)
                 btn:SetScript("OnClick", function()
                     pendingIgnoredSlots[slotInfo.id] = nil
-                    if C_EquipmentSet and C_EquipmentSet.UnignoreSlotForSave then
-                        pcall(C_EquipmentSet.UnignoreSlotForSave, slotInfo.id)
-                    end
+                    UpdateSlotBadges()
                     if C_Container and C_Container.UseContainerItem then
                         C_Container.UseContainerItem(entry.bag, entry.slot)
                     elseif UseContainerItem then
@@ -1344,9 +1329,7 @@ local function CreateCharacterView(parentFrame)
             if CursorHasItem() then
                 PickupInventoryItem(self.slotId)
                 pendingIgnoredSlots[self.slotId] = nil
-                if C_EquipmentSet and C_EquipmentSet.UnignoreSlotForSave then
-                    pcall(C_EquipmentSet.UnignoreSlotForSave, self.slotId)
-                end
+                UpdateSlotBadges()
             else
                 local flyout = _G["OnePanel_EquipmentFlyout"]
                 if flyout and flyout:IsShown() and flyout.currentSlotId == slotInfo.id then
@@ -1370,9 +1353,7 @@ local function CreateCharacterView(parentFrame)
             if InCombatLockdown and InCombatLockdown() then return end
             PickupInventoryItem(self.slotId)
             pendingIgnoredSlots[self.slotId] = nil
-            if C_EquipmentSet and C_EquipmentSet.UnignoreSlotForSave then
-                pcall(C_EquipmentSet.UnignoreSlotForSave, self.slotId)
-            end
+            UpdateSlotBadges()
             if container and container.UpdateEquipment then
                 container:UpdateEquipment()
             end
@@ -1412,7 +1393,7 @@ local function CreateCharacterView(parentFrame)
         end
         local setAtlasNorm = pcall(function() normalTex:SetAtlas("UI-Character-Info-Button-PullSide", true) end)
         if not setAtlasNorm or not normalTex:GetTexture() then
-            normalTex:SetTexture(8175457)
+            normalTex:SetTexture("Interface\\Buttons\\UI-SpellbookSearch-DrillDown")
         end
         if isLeftSlot and normalTex.SetTexCoord then
             normalTex:SetTexCoord(1, 0, 0, 1) -- Chevron points RIGHT towards center/flyout
@@ -1432,7 +1413,7 @@ local function CreateCharacterView(parentFrame)
         end
         local setAtlasPushed = pcall(function() pushedTex:SetAtlas("UI-Character-Info-Button-PullSide-Pressed", true) end)
         if not setAtlasPushed or not pushedTex:GetTexture() then
-            pushedTex:SetTexture(8175457)
+            pushedTex:SetTexture("Interface\\Buttons\\UI-SpellbookSearch-DrillDown")
         end
         if isLeftSlot and pushedTex.SetTexCoord then
             pushedTex:SetTexCoord(1, 0, 0, 1)
@@ -1452,7 +1433,7 @@ local function CreateCharacterView(parentFrame)
         end
         local setAtlasHl = pcall(function() highlightTex:SetAtlas("UI-Character-Info-Button-PullSide", true) end)
         if not setAtlasHl or not highlightTex:GetTexture() then
-            highlightTex:SetTexture(8175457)
+            highlightTex:SetTexture("Interface\\Buttons\\UI-Common-MouseHilight")
         end
         if isLeftSlot and highlightTex.SetTexCoord then
             highlightTex:SetTexCoord(1, 0, 0, 1)
@@ -1519,17 +1500,11 @@ local function CreateCharacterView(parentFrame)
     
     local toggleIcon = toggleBtn:CreateTexture(nil, "ARTWORK")
     toggleIcon:SetAllPoints(toggleBtn)
-    local setNorm = pcall(function() toggleIcon:SetTexture(130869) end)
-    if not setNorm or not toggleIcon:GetTexture() then
-        toggleIcon:SetTexture("Interface\\Buttons\\UI-SpellbookSearch-DrillDown")
-    end
+    toggleIcon:SetTexture("Interface\\Buttons\\UI-SpellbookSearch-DrillDown")
     toggleBtn.Icon = toggleIcon
     
     local toggleHilight = toggleBtn:CreateTexture(nil, "HIGHLIGHT")
-    local setHilight = pcall(function() toggleHilight:SetTexture(130757) end)
-    if not setHilight or not toggleHilight:GetTexture() then
-        toggleHilight:SetTexture("Interface\\Buttons\\UI-Common-MouseHilight")
-    end
+    toggleHilight:SetTexture("Interface\\Buttons\\UI-Common-MouseHilight")
     toggleHilight:SetBlendMode("ADD")
     toggleHilight:SetAllPoints(toggleBtn)
     
@@ -1761,6 +1736,21 @@ local function CreateCharacterView(parentFrame)
     -- Selected Set ID State for Top Action Controls
     local selectedSetID = nil
 
+    local function SafeSetIconTexture(texObj, iconVal, fallback)
+        local fb = fallback or "Interface\\Icons\\INV_Misc_QuestionMark"
+        if not texObj then return end
+        if type(iconVal) == "string" and iconVal ~= "" then
+            texObj:SetTexture(iconVal)
+        elseif type(iconVal) == "number" and iconVal > 0 then
+            local ok = pcall(function() texObj:SetTexture(iconVal) end)
+            if not ok or not texObj:GetTexture() then
+                texObj:SetTexture(fb)
+            end
+        else
+            texObj:SetTexture(fb)
+        end
+    end
+
     -- Top Action Buttons (Row 1: + New Set / Row 2: Equip & Save)
     local newSetBtn = CreateSilverActionButton(outfitsView, "OnePanel_NewSetBtn", "+ New Set")
     newSetBtn:SetSize(192, 22)
@@ -1776,8 +1766,8 @@ local function CreateCharacterView(parentFrame)
             GameTooltip:SetText(ERR_NOT_IN_COMBAT or "Cannot change equipment in combat.", 1.0, 0.1, 0.1)
             GameTooltip:Show()
         elseif not self:IsEnabled() and selectedSetID and C_EquipmentSet and C_EquipmentSet.GetEquipmentSetInfo then
-            local _, _, _, isEquipped = C_EquipmentSet.GetEquipmentSetInfo(selectedSetID)
-            if isEquipped then
+            local okInfo, _, _, _, isEquipped = pcall(C_EquipmentSet.GetEquipmentSetInfo, selectedSetID)
+            if okInfo and isEquipped then
                 GameTooltip:SetOwner(self, "ANCHOR_RIGHT")
                 GameTooltip:SetText("Equipment set is already equipped.", 0.8, 0.8, 0.8)
                 GameTooltip:Show()
@@ -1842,8 +1832,8 @@ local function CreateCharacterView(parentFrame)
             saveBtn:Disable()
             return
         end
-        local name, iconFileID, _, isEquipped = C_EquipmentSet.GetEquipmentSetInfo(selectedSetID)
-        if not name then
+        local okInfo, name, iconFileID, _, isEquipped = pcall(C_EquipmentSet.GetEquipmentSetInfo, selectedSetID)
+        if not okInfo or not name then
             equipBtn:Disable()
             saveBtn:Disable()
             return
@@ -1879,10 +1869,35 @@ local function CreateCharacterView(parentFrame)
     }
 
     local function GetSetItemStatus(setID)
-        local name, iconFileID, _, isEquipped, numItems, numEquipped, numInInventory, numLost = C_EquipmentSet.GetEquipmentSetInfo(setID)
+        local name, iconFileID, _, isEquipped, numItems, numEquipped, numInInventory, numLost
+        if C_EquipmentSet and C_EquipmentSet.GetEquipmentSetInfo then
+            local okInfo, n, ic, _, isEq, nI, nEq, nInv, nL = pcall(C_EquipmentSet.GetEquipmentSetInfo, setID)
+            if okInfo then
+                name = n
+                iconFileID = ic
+                isEquipped = isEq
+                numItems = nI
+                numEquipped = nEq
+                numInInventory = nInv
+                numLost = nL
+            end
+        end
         
-        local itemIDs = (C_EquipmentSet and C_EquipmentSet.GetItemIDs) and C_EquipmentSet.GetItemIDs(setID) or {}
-        local locations = (C_EquipmentSet and C_EquipmentSet.GetItemLocations) and C_EquipmentSet.GetItemLocations(setID) or {}
+        local itemIDs = {}
+        if C_EquipmentSet and C_EquipmentSet.GetItemIDs then
+            local okItems, resItems = pcall(C_EquipmentSet.GetItemIDs, setID)
+            if okItems and type(resItems) == "table" then
+                itemIDs = resItems
+            end
+        end
+        
+        local locations = {}
+        if C_EquipmentSet and C_EquipmentSet.GetItemLocations then
+            local okLoc, resLoc = pcall(C_EquipmentSet.GetItemLocations, setID)
+            if okLoc and type(resLoc) == "table" then
+                locations = resLoc
+            end
+        end
         
         local ignoredSlots = {}
         if C_EquipmentSet and C_EquipmentSet.GetIgnoredSlots then
@@ -1961,15 +1976,21 @@ local function CreateCharacterView(parentFrame)
         if not outfitsContent.rows then outfitsContent.rows = {} end
         for _, r in ipairs(outfitsContent.rows) do r:Hide() end
         
-        local setIDs = C_EquipmentSet and C_EquipmentSet.GetEquipmentSetIDs and C_EquipmentSet.GetEquipmentSetIDs() or {}
+        local setIDs = {}
+        if C_EquipmentSet and C_EquipmentSet.GetEquipmentSetIDs then
+            local okSets, resSets = pcall(C_EquipmentSet.GetEquipmentSetIDs)
+            if okSets and type(resSets) == "table" then
+                setIDs = resSets
+            end
+        end
         local yOffset = -2
         
         -- Validate or choose default selectedSetID
         local foundSelected = false
         local equippedSetID = nil
         for _, sID in ipairs(setIDs) do
-            local _, _, _, isEq = C_EquipmentSet.GetEquipmentSetInfo(sID)
-            if isEq then equippedSetID = sID end
+            local okEq, _, _, _, isEq = pcall(C_EquipmentSet.GetEquipmentSetInfo, sID)
+            if okEq and isEq then equippedSetID = sID end
             if sID == selectedSetID then foundSelected = true end
         end
         if not foundSelected then
@@ -2103,7 +2124,7 @@ local function CreateCharacterView(parentFrame)
             row:ClearAllPoints()
             row:SetPoint("TOPLEFT", outfitsContent, "TOPLEFT", 1, yOffset)
             
-            row.Icon:SetTexture(iconFileID or "Interface\\Icons\\INV_Misc_QuestionMark")
+            SafeSetIconTexture(row.Icon, iconFileID)
             row.NameText:SetText(name or ("Set " .. setID))
             
             -- Selection Highlight
@@ -2267,14 +2288,20 @@ local function CreateCharacterView(parentFrame)
                 return tex
             end
         end
-        return 134400
+        return "Interface\\Icons\\INV_Misc_QuestionMark"
     end
 
     local function GetEquippedSetName()
-        local setIDs = C_EquipmentSet and C_EquipmentSet.GetEquipmentSetIDs and C_EquipmentSet.GetEquipmentSetIDs() or {}
+        local setIDs = {}
+        if C_EquipmentSet and C_EquipmentSet.GetEquipmentSetIDs then
+            local okSets, resSets = pcall(C_EquipmentSet.GetEquipmentSetIDs)
+            if okSets and type(resSets) == "table" then
+                setIDs = resSets
+            end
+        end
         for _, setID in ipairs(setIDs) do
-            local name, _, _, isEquipped = C_EquipmentSet.GetEquipmentSetInfo(setID)
-            if isEquipped then
+            local okInfo, name, _, _, isEquipped = pcall(C_EquipmentSet.GetEquipmentSetInfo, setID)
+            if okInfo and isEquipped then
                 return name
             end
         end
@@ -2309,7 +2336,14 @@ local function CreateCharacterView(parentFrame)
         end
         
         if #cachedIconList == 0 then
-            cachedIconList = { 134400, 132089, 132090, 132091, 132092, 132093 }
+            cachedIconList = {
+                "Interface\\Icons\\INV_Misc_QuestionMark",
+                "Interface\\Icons\\INV_Chest_Plate01",
+                "Interface\\Icons\\INV_Helmet_01",
+                "Interface\\Icons\\INV_Sword_04",
+                "Interface\\Icons\\INV_Shield_04",
+                "Interface\\Icons\\INV_Misc_Bag_08",
+            }
         end
         return cachedIconList
     end
@@ -2440,7 +2474,7 @@ local function CreateCharacterView(parentFrame)
         
         dlg.existingSetID = existingSetID
         dlg.selectedIconID = defaultIconID or GetDefaultSetIcon()
-        dlg.IconPreview:SetTexture(dlg.selectedIconID)
+        SafeSetIconTexture(dlg.IconPreview, dlg.selectedIconID)
         dlg.Input:SetText(defaultName or "")
         dlg.Input:HighlightText()
         
@@ -2495,7 +2529,7 @@ local function CreateCharacterView(parentFrame)
             btn:ClearAllPoints()
             btn:SetPoint("TOPLEFT", content, "TOPLEFT", startX + col * (btnSize + spacing), startY - row * (btnSize + spacing))
             
-            btn.Tex:SetTexture(iconID)
+            SafeSetIconTexture(btn.Tex, iconID)
             if iconID == dlg.selectedIconID then
                 btn.SelectedBorder:Show()
             else
@@ -2504,7 +2538,7 @@ local function CreateCharacterView(parentFrame)
             
             btn:SetScript("OnClick", function()
                 dlg.selectedIconID = iconID
-                dlg.IconPreview:SetTexture(iconID)
+                SafeSetIconTexture(dlg.IconPreview, iconID)
                 for _, b in ipairs(content.buttons) do
                     if b.Tex:GetTexture() == iconID then
                         b.SelectedBorder:Show()
@@ -2567,6 +2601,34 @@ local function CreateCharacterView(parentFrame)
         end
     end)
     
+    local isRefreshPending = false
+    local function RequestOutfitsRefresh()
+        if isRefreshPending then return end
+        if not (outfitsView and outfitsView:IsVisible() and outfitsView.Refresh) then return end
+        isRefreshPending = true
+        if C_Timer and C_Timer.After then
+            C_Timer.After(0.05, function()
+                isRefreshPending = false
+                if outfitsView and outfitsView:IsVisible() and outfitsView.Refresh then
+                    pcall(outfitsView.Refresh)
+                end
+            end)
+        else
+            local timerFrame = CreateFrame("Frame")
+            local elapsed = 0
+            timerFrame:SetScript("OnUpdate", function(self, dt)
+                elapsed = elapsed + dt
+                if elapsed >= 0.05 then
+                    self:SetScript("OnUpdate", nil)
+                    isRefreshPending = false
+                    if outfitsView and outfitsView:IsVisible() and outfitsView.Refresh then
+                        pcall(outfitsView.Refresh)
+                    end
+                end
+            end)
+        end
+    end
+
     -- Register Equipment Set & Combat Events for Auto Refresh
     local eqEventFrame = CreateFrame("Frame", "OnePanel_EquipmentSet_EventFrame", UIParent)
     eqEventFrame:RegisterEvent("EQUIPMENT_SETS_CHANGED")
@@ -2577,17 +2639,13 @@ local function CreateCharacterView(parentFrame)
     eqEventFrame:RegisterEvent("PLAYER_REGEN_DISABLED")
     eqEventFrame:RegisterEvent("PLAYER_REGEN_ENABLED")
     eqEventFrame:SetScript("OnEvent", function()
-        if outfitsView and outfitsView:IsVisible() and outfitsView.Refresh then
-            pcall(outfitsView.Refresh)
-        end
+        RequestOutfitsRefresh()
     end)
     outfitsView:HookScript("OnShow", function()
         if selectedSetID then
             LoadIgnoredSlotsForSet(selectedSetID)
         end
-        if outfitsView.Refresh then
-            pcall(outfitsView.Refresh)
-        end
+        RequestOutfitsRefresh()
     end)
     
     -- Sub-View 3: Titles
@@ -2604,7 +2662,7 @@ local function CreateCharacterView(parentFrame)
         for id, view in pairs(subPanel.views) do
             if id == targetTabId then
                 view:Show()
-                if type(view.Refresh) == "function" then
+                if id ~= "outfits" and type(view.Refresh) == "function" then
                     pcall(view.Refresh, view)
                 end
             else
@@ -2624,9 +2682,6 @@ local function CreateCharacterView(parentFrame)
         end
 
         local showFlyout = (targetTabId == "outfits")
-        if showFlyout and selectedSetID then
-            LoadIgnoredSlotsForSet(selectedSetID)
-        end
         if container.slots then
             for _, slotBtn in pairs(container.slots) do
                 if slotBtn.FlyoutArrow then
@@ -2665,7 +2720,12 @@ local function CreateCharacterView(parentFrame)
         local tabBorder = btn:CreateTexture(nil, "BORDER")
         local setBorder = pcall(function() tabBorder:SetAtlas("UI-Character-Info-StatTab", true) end)
         if not setBorder or not tabBorder:GetTexture() then
-            tabBorder:SetTexture(8175457)
+            tabBorder:SetTexture("Interface\\PaperDollInfoFrame\\PaperDollSidebarTabs")
+            if not tabBorder:GetTexture() then
+                tabBorder:SetTexture("Interface\\Buttons\\UI-Quickslot2")
+            else
+                tabBorder:SetTexCoord(0.015625, 0.53125, 0.015625, 0.328125)
+            end
         end
         if tabBorder.SetDesaturated then
             tabBorder:SetDesaturated(true)
@@ -2678,7 +2738,13 @@ local function CreateCharacterView(parentFrame)
         local tabSelected = btn:CreateTexture(nil, "OVERLAY", nil, 1)
         local setSelected = pcall(function() tabSelected:SetAtlas("UI-Character-Info-StatTab-Selected", true) end)
         if not setSelected or not tabSelected:GetTexture() then
-            tabSelected:SetTexture(8175457)
+            tabSelected:SetTexture("Interface\\PaperDollInfoFrame\\PaperDollSidebarTabs")
+            if not tabSelected:GetTexture() then
+                tabSelected:SetTexture("Interface\\Buttons\\CheckButtonHilight")
+                tabSelected:SetBlendMode("ADD")
+            else
+                tabSelected:SetTexCoord(0.015625, 0.53125, 0.359375, 0.671875)
+            end
         end
         if tabSelected.SetDesaturated then
             tabSelected:SetDesaturated(true)
@@ -2773,7 +2839,9 @@ local function CreateCharacterView(parentFrame)
     container:SetScript("OnEvent", function(self, event, arg1)
         if event == "PLAYER_EQUIPMENT_CHANGED" or event == "UNIT_STATS" or event == "PLAYER_DAMAGE_DONE_MODS" or event == "ITEM_LOCK_CHANGED" or event == "CURSOR_CHANGED" then
             self:UpdateEquipment()
-            if self.RefreshPlayerModel then self:RefreshPlayerModel() end
+            if event == "PLAYER_EQUIPMENT_CHANGED" and self.RefreshPlayerModel then
+                self:RefreshPlayerModel()
+            end
         elseif event == "UNIT_MODEL_CHANGED" or event == "UNIT_PORTRAIT_UPDATE" or event == "UPDATE_SHAPESHIFT_FORM" or event == "UPDATE_SHAPESHIFT_FORMS" then
             if arg1 == "player" or arg1 == nil then
                 if self.RefreshPlayerModel then self:RefreshPlayerModel() end
