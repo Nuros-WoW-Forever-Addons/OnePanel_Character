@@ -1746,6 +1746,19 @@ local function CreateCharacterView(parentFrame)
         saveBtn:Enable()
     end
 
+    local function IsSlotIgnoredInTable(ignoredSlots, slotID)
+        if type(ignoredSlots) ~= "table" then return false end
+        if ignoredSlots[slotID] == true or ignoredSlots[slotID] == 1 then
+            return true
+        end
+        for _, val in pairs(ignoredSlots) do
+            if val == slotID then
+                return true
+            end
+        end
+        return false
+    end
+
     ClearIgnoredSlots = function()
         if C_EquipmentSet and C_EquipmentSet.ClearIgnoredSlotsForSave then
             pcall(C_EquipmentSet.ClearIgnoredSlotsForSave)
@@ -1762,7 +1775,7 @@ local function CreateCharacterView(parentFrame)
 
     UpdateIgnoredSlotsForSet = function(setID)
         if not container or not container.slots then return end
-        if not setID or not C_EquipmentSet or not C_EquipmentSet.GetIgnoredSlots then
+        if setID == nil or not C_EquipmentSet or not C_EquipmentSet.GetIgnoredSlots then
             ClearIgnoredSlots()
             return
         end
@@ -1770,7 +1783,7 @@ local function CreateCharacterView(parentFrame)
         local ok, ignoredSlots = pcall(C_EquipmentSet.GetIgnoredSlots, setID)
         if ok and type(ignoredSlots) == "table" then
             for slotID, slotBtn in pairs(container.slots) do
-                local isIgnored = (ignoredSlots[slotID] == true)
+                local isIgnored = IsSlotIgnoredInTable(ignoredSlots, slotID)
                 slotBtn.ignored = isIgnored or nil
                 if slotBtn.ignoreTexture then
                     slotBtn.ignoreTexture:SetShown(isIgnored)
@@ -1819,11 +1832,11 @@ local function CreateCharacterView(parentFrame)
         end
         if not foundSelected then
             selectedSetID = equippedSetID or setIDs[1]
+            if selectedSetID and UpdateIgnoredSlotsForSet then
+                UpdateIgnoredSlotsForSet(selectedSetID)
+            end
         end
         UpdateTopButtonStates()
-        if selectedSetID and UpdateIgnoredSlotsForSet then
-            UpdateIgnoredSlotsForSet(selectedSetID)
-        end
         
         if #setIDs == 0 then
             local emptyMsg = outfitsContent.emptyMsg
@@ -2050,6 +2063,9 @@ local function CreateCharacterView(parentFrame)
             
             -- Edit Button Click
             row.EditBtn:SetScript("OnClick", function()
+                selectedSetID = setID
+                if UpdateIgnoredSlotsForSet then UpdateIgnoredSlotsForSet(setID) end
+                if outfitsView and outfitsView.Refresh then outfitsView:Refresh() end
                 if ShowNewSetDialog then ShowNewSetDialog(name, iconFileID, setID) end
             end)
             
@@ -2220,16 +2236,73 @@ local function CreateCharacterView(parentFrame)
                 local setName = (input:GetText() or ""):match("^%s*(.-)%s*$")
                 if setName and setName ~= "" then
                     local iconID = dlg.selectedIconID or GetDefaultSetIcon()
-                    if dlg.existingSetID then
-                        if C_EquipmentSet and C_EquipmentSet.ModifyEquipmentSet then
-                            pcall(C_EquipmentSet.ModifyEquipmentSet, dlg.existingSetID, setName, iconID)
+                    local iconParam = (type(iconID) == "string") and iconID or tostring(iconID)
+                    
+                    -- Pre-sync all slot ignored states from the character panel to the game engine
+                    if container and container.slots then
+                        for slotID, slotBtn in pairs(container.slots) do
+                            if slotBtn.ignored then
+                                pcall(C_EquipmentSet.IgnoreSlotForSave, slotID)
+                            else
+                                pcall(C_EquipmentSet.UnignoreSlotForSave, slotID)
+                            end
                         end
+                    end
+                    
+                    if dlg.existingSetID ~= nil then
+                        selectedSetID = dlg.existingSetID
+                        if C_EquipmentSet and C_EquipmentSet.ModifyEquipmentSet then
+                            pcall(C_EquipmentSet.ModifyEquipmentSet, dlg.existingSetID, setName, iconParam)
+                        end
+                        if C_EquipmentSet and C_EquipmentSet.SaveEquipmentSet then
+                            local saveOk = pcall(C_EquipmentSet.SaveEquipmentSet, dlg.existingSetID)
+                            if not saveOk then
+                                pcall(C_EquipmentSet.SaveEquipmentSet, dlg.existingSetID, tostring(iconParam or ""))
+                            end
+                        end
+                        ShowSystemAlertMessage(string.format("[OnePanel] Equipment set '%s' updated.", setName), 0.2, 1.0, 0.2)
                     else
                         if C_EquipmentSet and C_EquipmentSet.CreateEquipmentSet then
-                            pcall(C_EquipmentSet.CreateEquipmentSet, setName, iconID)
+                            local ok, createdID = pcall(C_EquipmentSet.CreateEquipmentSet, setName, iconParam)
+                            local newID = (ok and type(createdID) == "number") and createdID or nil
+                            if not newID and C_EquipmentSet.GetEquipmentSetID then
+                                newID = C_EquipmentSet.GetEquipmentSetID(setName)
+                            end
+                            if not newID and C_EquipmentSet.GetEquipmentSetIDs then
+                                local allIDs = C_EquipmentSet.GetEquipmentSetIDs() or {}
+                                for _, sID in ipairs(allIDs) do
+                                    local n = C_EquipmentSet.GetEquipmentSetInfo(sID)
+                                    if n == setName then
+                                        newID = sID
+                                        break
+                                    end
+                                end
+                            end
+                            if newID ~= nil then
+                                selectedSetID = newID
+                                if container and container.slots then
+                                    for slotID, slotBtn in pairs(container.slots) do
+                                        if slotBtn.ignored then
+                                            pcall(C_EquipmentSet.IgnoreSlotForSave, slotID)
+                                        else
+                                            pcall(C_EquipmentSet.UnignoreSlotForSave, slotID)
+                                        end
+                                    end
+                                end
+                                if C_EquipmentSet.SaveEquipmentSet then
+                                    local saveOk = pcall(C_EquipmentSet.SaveEquipmentSet, newID)
+                                    if not saveOk then
+                                        pcall(C_EquipmentSet.SaveEquipmentSet, newID, tostring(iconParam or ""))
+                                    end
+                                end
+                            end
+                            ShowSystemAlertMessage(string.format("[OnePanel] Equipment set '%s' created.", setName), 0.2, 1.0, 0.2)
                         end
                     end
                     if outfitsView and outfitsView.Refresh then outfitsView:Refresh() end
+                    if selectedSetID ~= nil and UpdateIgnoredSlotsForSet then
+                        UpdateIgnoredSlotsForSet(selectedSetID)
+                    end
                 end
                 dlg:Hide()
             end
@@ -2267,7 +2340,11 @@ local function CreateCharacterView(parentFrame)
         dlg.Input:SetText(defaultName or "")
         dlg.Input:HighlightText()
         
-        if existingSetID then
+        if existingSetID ~= nil then
+            selectedSetID = existingSetID
+            if UpdateIgnoredSlotsForSet then
+                UpdateIgnoredSlotsForSet(existingSetID)
+            end
             dlg.Title:SetText("Edit Equipment Set")
             dlg.SaveBtn:SetText("Save Changes")
         else
@@ -2346,7 +2423,6 @@ local function CreateCharacterView(parentFrame)
     
     newSetBtn:SetScript("OnClick", function()
         selectedSetID = nil
-        if ClearIgnoredSlots then ClearIgnoredSlots() end
         if outfitsView and outfitsView.Refresh then outfitsView:Refresh() end
         if ShowNewSetDialog then
             ShowNewSetDialog("")
@@ -2358,8 +2434,11 @@ local function CreateCharacterView(parentFrame)
             UIErrorsFrame:AddMessage(ERR_NOT_IN_COMBAT or "Cannot change equipment in combat.", 1.0, 0.1, 0.1, 1.0)
             return
         end
-        if selectedSetID and C_EquipmentSet and C_EquipmentSet.UseEquipmentSet then
+        if selectedSetID ~= nil and C_EquipmentSet and C_EquipmentSet.UseEquipmentSet then
             pcall(C_EquipmentSet.UseEquipmentSet, selectedSetID)
+            if UpdateIgnoredSlotsForSet then
+                UpdateIgnoredSlotsForSet(selectedSetID)
+            end
             if outfitsView and outfitsView.Refresh then
                 outfitsView:Refresh()
             end
@@ -2367,7 +2446,7 @@ local function CreateCharacterView(parentFrame)
     end)
     
     saveBtn:SetScript("OnClick", function()
-        if selectedSetID and C_EquipmentSet and C_EquipmentSet.GetEquipmentSetInfo then
+        if selectedSetID ~= nil and C_EquipmentSet and C_EquipmentSet.GetEquipmentSetInfo then
             local name, icon = C_EquipmentSet.GetEquipmentSetInfo(selectedSetID)
             ShowMetalConfirmDialog({
                 dialogType = "CONFIRM_OVERWRITE_SET",
@@ -2375,10 +2454,25 @@ local function CreateCharacterView(parentFrame)
                 text = string.format("Save current equipment to set '|cffffd100%s|r'?", name or ""),
                 acceptText = "Save",
                 cancelText = "Cancel",
-                data = { setID = selectedSetID, icon = icon },
-                onAccept = function(data)
-                    if data and data.setID and C_EquipmentSet and C_EquipmentSet.SaveEquipmentSet then
-                        pcall(C_EquipmentSet.SaveEquipmentSet, data.setID, data.icon)
+                data = selectedSetID,
+                onAccept = function(targetSetID)
+                    if targetSetID ~= nil and C_EquipmentSet and C_EquipmentSet.SaveEquipmentSet then
+                        if container and container.slots then
+                            for slotID, slotBtn in pairs(container.slots) do
+                                if slotBtn.ignored then
+                                    pcall(C_EquipmentSet.IgnoreSlotForSave, slotID)
+                                else
+                                    pcall(C_EquipmentSet.UnignoreSlotForSave, slotID)
+                                end
+                            end
+                        end
+                        local ok, err = pcall(C_EquipmentSet.SaveEquipmentSet, targetSetID)
+                        if not ok then
+                            pcall(C_EquipmentSet.SaveEquipmentSet, targetSetID, tostring(icon or ""))
+                        end
+                        if UpdateIgnoredSlotsForSet then
+                            UpdateIgnoredSlotsForSet(targetSetID)
+                        end
                         if outfitsView and outfitsView.Refresh then
                             pcall(outfitsView.Refresh)
                         end
@@ -2654,10 +2748,41 @@ local isBuyingBack = false
 local isSellingConfirmed = false
 local lastBuybackCount = 0
 local confirmedSoldItemIDs = {}
+local setItemIDsCache = {}
+
+local function RefreshSetItemsCache()
+    setItemIDsCache = {}
+    if not C_EquipmentSet or not C_EquipmentSet.GetEquipmentSetIDs then return end
+    local okSets, setIDs = pcall(C_EquipmentSet.GetEquipmentSetIDs)
+    if not okSets or not setIDs or type(setIDs) ~= "table" then return end
+    for _, setID in ipairs(setIDs) do
+        local okInfo, setName = pcall(C_EquipmentSet.GetEquipmentSetInfo, setID)
+        setName = (okInfo and setName) or ("Set " .. tostring(setID))
+        local okItems, itemIDs = pcall(C_EquipmentSet.GetItemIDs, setID)
+        if okItems and type(itemIDs) == "table" then
+            for _, sItemID in pairs(itemIDs) do
+                local numID = tonumber(sItemID)
+                if numID and numID > 0 then
+                    if setItemIDsCache[numID] then
+                        if not setItemIDsCache[numID]:find(setName, 1, true) then
+                            setItemIDsCache[numID] = setItemIDsCache[numID] .. ", " .. setName
+                        end
+                    else
+                        setItemIDsCache[numID] = setName
+                    end
+                end
+            end
+        end
+    end
+end
 
 -- Check if an item (by itemID or itemLink) belongs to any equipment set
 local function GetItemEquipmentSets(targetItemID)
     if not targetItemID or targetItemID <= 0 then return false, nil end
+    if setItemIDsCache[targetItemID] then
+        return true, setItemIDsCache[targetItemID]
+    end
+    
     if not C_EquipmentSet or not C_EquipmentSet.GetEquipmentSetIDs then return false, nil end
     
     local okSets, setIDs = pcall(C_EquipmentSet.GetEquipmentSetIDs)
@@ -2667,8 +2792,7 @@ local function GetItemEquipmentSets(targetItemID)
     for _, setID in ipairs(setIDs) do
         local okItems, itemIDs = pcall(C_EquipmentSet.GetItemIDs, setID)
         if okItems and type(itemIDs) == "table" then
-            for slotID = 1, 19 do
-                local sItemID = itemIDs[slotID]
+            for _, sItemID in pairs(itemIDs) do
                 if sItemID and tonumber(sItemID) == targetItemID then
                     local okInfo, setName = pcall(C_EquipmentSet.GetEquipmentSetInfo, setID)
                     table.insert(matchingSets, (okInfo and setName) or ("Set " .. tostring(setID)))
@@ -2866,10 +2990,14 @@ local function InitVendorProtection()
     vendorFrame:RegisterEvent("MERCHANT_SHOW")
     vendorFrame:RegisterEvent("MERCHANT_UPDATE")
     vendorFrame:RegisterEvent("MERCHANT_CLOSED")
+    vendorFrame:RegisterEvent("EQUIPMENT_SETS_CHANGED")
     vendorFrame:SetScript("OnEvent", function(self, event)
         if event == "MERCHANT_SHOW" then
+            RefreshSetItemsCache()
             lastBuybackCount = (GetNumBuybackItems and GetNumBuybackItems()) or 0
             confirmedSoldItemIDs = {}
+        elseif event == "EQUIPMENT_SETS_CHANGED" then
+            RefreshSetItemsCache()
         elseif event == "MERCHANT_UPDATE" then
             local current = (GetNumBuybackItems and GetNumBuybackItems()) or 0
             if current > lastBuybackCount then
@@ -2887,6 +3015,7 @@ local function InitVendorProtection()
             end
         end
     end)
+    RefreshSetItemsCache()
 end
 
 -------------------------------------------------------------------------------
