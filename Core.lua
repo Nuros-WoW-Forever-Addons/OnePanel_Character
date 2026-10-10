@@ -424,6 +424,13 @@ local function CreateCharacterView(parentFrame)
     leftArea:SetWidth(338)
     
     local RefreshPlayerModel = nil
+    local subPanel = nil
+    local selectedSetID = nil
+    local UpdateIgnoredSlotsForSet = nil
+    local ClearIgnoredSlots = nil
+    local saveBtn = nil
+    local equipBtn = nil
+    local outfitsView = nil
     
     local function UpdateRaceBackgroundArt()
         return true
@@ -893,21 +900,41 @@ local function CreateCharacterView(parentFrame)
         
         local flyoutButtons = {}
         
-        -- 1. Equippable bag items first
-        for _, item in ipairs(bagItems) do
-            table.insert(flyoutButtons, item)
+        -- 1. If Outfits sub-tab is active, add Ignore / Include Slot button
+        local isOutfitsActive = (subPanel and subPanel.activeTab == "outfits")
+        if isOutfitsActive then
+            if not anchorFrame.ignored then
+                table.insert(flyoutButtons, {
+                    isIgnoreSlot = true,
+                    name = "Ignore this slot",
+                    tooltipDesc = "Items in this slot will not be changed when this set is equipped.",
+                    texture = "Interface\\PaperDollInfoFrame\\UI-GearManager-LeaveItem-Opaque",
+                })
+            else
+                table.insert(flyoutButtons, {
+                    isUnignoreSlot = true,
+                    name = "Include this slot",
+                    tooltipDesc = "Items in this slot will be saved and equipped with this set.",
+                    texture = "Interface\\PaperDollInfoFrame\\UI-GearManager-Undo",
+                })
+            end
         end
         
-        -- 2. If an item is currently equipped, append "Place In Bags" AFTER bag items
+        -- 2. If an item is currently equipped, append "Place In Bags"
         if hasEquipped then
             table.insert(flyoutButtons, {
                 isUnequip = true,
                 name = "Place In Bags",
-                texture = 255351,
+                texture = "Interface\\PaperDollInfoFrame\\UI-GearManager-ItemIntoBag",
             })
         end
         
-        -- 3. If nothing is equipped and no items in bags:
+        -- 3. Equippable bag items
+        for _, item in ipairs(bagItems) do
+            table.insert(flyoutButtons, item)
+        end
+        
+        -- 4. If nothing is equipped, no ignore/unignore, and no items in bags:
         if #flyoutButtons == 0 then
             table.insert(flyoutButtons, {
                 isEmptySlot = true,
@@ -1029,21 +1056,69 @@ local function CreateCharacterView(parentFrame)
                     GameTooltip:SetText("No item found", 1, 0.82, 0)
                     GameTooltip:Show()
                 end)
-                btn:SetScript("OnLeave", function() GameTooltip_Hide() end)
+                btn:SetScript("OnLeave", GameTooltip_Hide)
                 btn:SetScript("OnClick", function() flyout:Hide() end)
-            elseif entry.isUnequip then
-                btn.Icon:SetTexture(255351)
+            elseif entry.isIgnoreSlot then
+                btn.Icon:SetTexture(entry.texture)
                 btn.Icon:SetDesaturated(false)
                 btn.Icon:SetVertexColor(1, 1, 1, 1)
                 btn.Border:Hide()
                 
                 btn:SetScript("OnEnter", function(self)
                     GameTooltip:SetOwner(self, "ANCHOR_RIGHT")
-                    GameTooltip:SetText("Place In Bags", 1, 1, 1)
+                    GameTooltip:SetText(EQUIPMENT_MANAGER_IGNORE_SLOT or "Ignore this slot", 1, 1, 1)
+                    if entry.tooltipDesc then
+                        GameTooltip:AddLine(entry.tooltipDesc, 0.8, 0.8, 0.8, true)
+                    end
+                    GameTooltip:Show()
+                end)
+                btn:SetScript("OnLeave", GameTooltip_Hide)
+                btn:SetScript("OnClick", function()
+                    if C_EquipmentSet and C_EquipmentSet.IgnoreSlotForSave then
+                        pcall(C_EquipmentSet.IgnoreSlotForSave, slotInfo.id)
+                    end
+                    anchorFrame.ignored = true
+                    if anchorFrame.ignoreTexture then anchorFrame.ignoreTexture:Show() end
+                    flyout:Hide()
+                    if saveBtn and saveBtn.Enable then saveBtn:Enable() end
+                end)
+            elseif entry.isUnignoreSlot then
+                btn.Icon:SetTexture(entry.texture)
+                btn.Icon:SetDesaturated(false)
+                btn.Icon:SetVertexColor(1, 1, 1, 1)
+                btn.Border:Hide()
+                
+                btn:SetScript("OnEnter", function(self)
+                    GameTooltip:SetOwner(self, "ANCHOR_RIGHT")
+                    GameTooltip:SetText(EQUIPMENT_MANAGER_UNIGNORE_SLOT or "Include this slot", 1, 1, 1)
+                    if entry.tooltipDesc then
+                        GameTooltip:AddLine(entry.tooltipDesc, 0.8, 0.8, 0.8, true)
+                    end
+                    GameTooltip:Show()
+                end)
+                btn:SetScript("OnLeave", GameTooltip_Hide)
+                btn:SetScript("OnClick", function()
+                    if C_EquipmentSet and C_EquipmentSet.UnignoreSlotForSave then
+                        pcall(C_EquipmentSet.UnignoreSlotForSave, slotInfo.id)
+                    end
+                    anchorFrame.ignored = nil
+                    if anchorFrame.ignoreTexture then anchorFrame.ignoreTexture:Hide() end
+                    flyout:Hide()
+                    if saveBtn and saveBtn.Enable then saveBtn:Enable() end
+                end)
+            elseif entry.isUnequip then
+                btn.Icon:SetTexture(entry.texture or "Interface\\PaperDollInfoFrame\\UI-GearManager-ItemIntoBag")
+                btn.Icon:SetDesaturated(false)
+                btn.Icon:SetVertexColor(1, 1, 1, 1)
+                btn.Border:Hide()
+                
+                btn:SetScript("OnEnter", function(self)
+                    GameTooltip:SetOwner(self, "ANCHOR_RIGHT")
+                    GameTooltip:SetText(EQUIPMENT_MANAGER_PLACE_IN_BAGS or "Place In Bags", 1, 1, 1)
                     GameTooltip:AddLine("Click to unequip item.", 0.8, 0.8, 0.8)
                     GameTooltip:Show()
                 end)
-                btn:SetScript("OnLeave", function() GameTooltip_Hide() end)
+                btn:SetScript("OnLeave", GameTooltip_Hide)
                 btn:SetScript("OnClick", function()
                     UnequipItemSlot(slotInfo.id)
                     flyout:Hide()
@@ -1155,6 +1230,12 @@ local function CreateCharacterView(parentFrame)
         hl:SetTexture("Interface\\Buttons\\ButtonHilight-Square")
         hl:SetBlendMode("ADD")
         hl:SetAllPoints(icon)
+        
+        local ignoreTexture = btn:CreateTexture(nil, "OVERLAY", nil, 6)
+        ignoreTexture:SetAllPoints(btn)
+        ignoreTexture:SetTexture("Interface\\PaperDollInfoFrame\\UI-GearManager-LeaveItem-Transparent")
+        ignoreTexture:Hide()
+        btn.ignoreTexture = ignoreTexture
         
         btn:SetScript("OnClick", function(self, button)
             if InCombatLockdown and InCombatLockdown() then
@@ -1375,7 +1456,7 @@ local function CreateCharacterView(parentFrame)
     -- Collapsible Side Panel & Subtab Header
     ---------------------------------------------------------------------------
     
-    local subPanel = CreateFrame("Frame", "OnePanel_CharacterSubPanel", container)
+    subPanel = CreateFrame("Frame", "OnePanel_CharacterSubPanel", container)
     subPanel:SetPoint("TOPRIGHT", container, "TOPRIGHT", -10, -12)
     subPanel:SetPoint("BOTTOMRIGHT", container, "BOTTOMRIGHT", -10, 12)
     subPanel:SetWidth(208)
@@ -1566,19 +1647,16 @@ local function CreateCharacterView(parentFrame)
     ---------------------------------------------------------------------------
     -- Sub-View 2: Equipment Manager / Outfits
     ---------------------------------------------------------------------------
-    local outfitsView = CreateFrame("Frame", "OnePanel_OutfitsSubView", subContentView)
+    outfitsView = CreateFrame("Frame", "OnePanel_OutfitsSubView", subContentView)
     outfitsView:SetAllPoints(subContentView)
     subPanel.views["outfits"] = outfitsView
-    
-    -- Selected Set ID State for Top Action Controls
-    local selectedSetID = nil
 
     -- Top Action Buttons (Row 1: + New Set / Row 2: Equip & Save)
     local newSetBtn = CreateSilverActionButton(outfitsView, "OnePanel_NewSetBtn", "+ New Set")
     newSetBtn:SetSize(192, 22)
     newSetBtn:SetPoint("TOPLEFT", outfitsView, "TOPLEFT", 4, -4)
     
-    local equipBtn = CreateSilverActionButton(outfitsView, "OnePanel_EquipSetBtn", "Equip")
+    equipBtn = CreateSilverActionButton(outfitsView, "OnePanel_EquipSetBtn", "Equip")
     equipBtn:SetSize(93, 22)
     equipBtn:SetPoint("TOPLEFT", outfitsView, "TOPLEFT", 4, -28)
     equipBtn:SetMotionScriptsWhileDisabled(true)
@@ -1598,7 +1676,7 @@ local function CreateCharacterView(parentFrame)
     end)
     equipBtn:SetScript("OnLeave", GameTooltip_Hide)
     
-    local saveBtn = CreateSilverActionButton(outfitsView, "OnePanel_SaveSetBtn", "Save")
+    saveBtn = CreateSilverActionButton(outfitsView, "OnePanel_SaveSetBtn", "Save")
     saveBtn:SetSize(93, 22)
     saveBtn:SetPoint("TOPRIGHT", outfitsView, "TOPRIGHT", -4, -28)
     
@@ -1668,85 +1746,59 @@ local function CreateCharacterView(parentFrame)
         saveBtn:Enable()
     end
 
-    local SLOT_NAMES = {
-        [1]  = _G["HEADSLOT"] or "Head",
-        [2]  = _G["NECKSLOT"] or "Neck",
-        [3]  = _G["SHOULDERSLOT"] or "Shoulder",
-        [4]  = _G["SHIRTSLOT"] or "Shirt",
-        [5]  = _G["CHESTSLOT"] or "Chest",
-        [6]  = _G["WAISTSLOT"] or "Waist",
-        [7]  = _G["LEGSSLOT"] or "Legs",
-        [8]  = _G["FEETSLOT"] or "Feet",
-        [9]  = _G["WRISTSLOT"] or "Wrist",
-        [10] = _G["HANDSSLOT"] or "Hands",
-        [11] = _G["FINGER0SLOT"] or "Ring 1",
-        [12] = _G["FINGER1SLOT"] or "Ring 2",
-        [13] = _G["TRINKET0SLOT"] or "Trinket 1",
-        [14] = _G["TRINKET1SLOT"] or "Trinket 2",
-        [15] = _G["BACKSLOT"] or "Back",
-        [16] = _G["MAINHANDSLOT"] or "Main Hand",
-        [17] = _G["SECONDARYHANDSLOT"] or "Off Hand",
-        [18] = _G["RANGEDSLOT"] or "Ranged",
-        [19] = _G["TABARDSLOT"] or "Tabard",
-    }
-
-    local function GetSetItemStatus(setID)
-        local name, iconFileID, _, isEquipped, numItems, numEquipped, numInInventory, numLost = C_EquipmentSet.GetEquipmentSetInfo(setID)
-        
-        local itemIDs = (C_EquipmentSet and C_EquipmentSet.GetItemIDs) and C_EquipmentSet.GetItemIDs(setID) or {}
-        local locations = (C_EquipmentSet and C_EquipmentSet.GetItemLocations) and C_EquipmentSet.GetItemLocations(setID) or {}
-        
-        local missingList = {}
-        local totalCount = 0
-        local availableCount = 0
-        local usedCounts = {}
-        
-        for slotID = 1, 19 do
-            local itemID = itemIDs[slotID]
-            if itemID and itemID > 0 then
-                totalCount = totalCount + 1
-                local loc = locations[slotID]
-                local isMissing = false
-                
-                local ownedCount = SafeGetItemCount(itemID)
-                local used = usedCounts[itemID] or 0
-                
-                -- Check if item is missing (-1 in locations, or player doesn't have enough copies in bags/equipment)
-                if (loc and loc == -1) or (used >= ownedCount) then
-                    isMissing = true
-                else
-                    usedCounts[itemID] = used + 1
-                end
-                
-                if isMissing then
-                    local itemName, itemLink, itemQuality, _, _, _, _, _, _, itemTexture = SafeGetItemInfo(itemID)
-                    if not itemName and C_Item and C_Item.RequestLoadItemDataByID then
-                        pcall(C_Item.RequestLoadItemDataByID, itemID)
-                    end
-                    table.insert(missingList, {
-                        slotID = slotID,
-                        slotName = SLOT_NAMES[slotID] or ("Slot " .. slotID),
-                        itemID = itemID,
-                        name = itemName,
-                        link = itemLink,
-                        quality = itemQuality,
-                        texture = itemTexture,
-                    })
-                else
-                    availableCount = availableCount + 1
+    ClearIgnoredSlots = function()
+        if C_EquipmentSet and C_EquipmentSet.ClearIgnoredSlotsForSave then
+            pcall(C_EquipmentSet.ClearIgnoredSlotsForSave)
+        end
+        if container and container.slots then
+            for _, slotBtn in pairs(container.slots) do
+                slotBtn.ignored = nil
+                if slotBtn.ignoreTexture then
+                    slotBtn.ignoreTexture:Hide()
                 end
             end
         end
-        
-        -- Fallback if itemIDs was empty or returned 0 items
-        if totalCount == 0 and numItems and numItems > 0 then
-            totalCount = numItems
-            local inInv = numInInventory or 0
-            local inEq = numEquipped or 0
-            availableCount = inInv + inEq
+    end
+
+    UpdateIgnoredSlotsForSet = function(setID)
+        if not container or not container.slots then return end
+        if not setID or not C_EquipmentSet or not C_EquipmentSet.GetIgnoredSlots then
+            ClearIgnoredSlots()
+            return
         end
         
-        return totalCount, availableCount, missingList, isEquipped, name, iconFileID
+        local ok, ignoredSlots = pcall(C_EquipmentSet.GetIgnoredSlots, setID)
+        if ok and type(ignoredSlots) == "table" then
+            for slotID, slotBtn in pairs(container.slots) do
+                local isIgnored = (ignoredSlots[slotID] == true)
+                slotBtn.ignored = isIgnored or nil
+                if slotBtn.ignoreTexture then
+                    slotBtn.ignoreTexture:SetShown(isIgnored)
+                end
+                if C_EquipmentSet then
+                    if isIgnored and C_EquipmentSet.IgnoreSlotForSave then
+                        pcall(C_EquipmentSet.IgnoreSlotForSave, slotID)
+                    elseif not isIgnored and C_EquipmentSet.UnignoreSlotForSave then
+                        pcall(C_EquipmentSet.UnignoreSlotForSave, slotID)
+                    end
+                end
+            end
+        else
+            ClearIgnoredSlots()
+        end
+    end
+
+    local function GetSetItemStatus(setID)
+        local name, iconFileID, _, isEquipped, numItems, numEquipped, numInInventory, numLost = C_EquipmentSet.GetEquipmentSetInfo(setID)
+        local totalCount = numItems or 0
+        local inInv = numInInventory or 0
+        local inEq = numEquipped or 0
+        local availableCount = inInv + inEq
+        local lostCount = numLost or 0
+        if lostCount == 0 and totalCount > availableCount then
+            lostCount = totalCount - availableCount
+        end
+        return totalCount, availableCount, lostCount, isEquipped, name, iconFileID
     end
 
     -- Dynamic Set List Renderer
@@ -1769,6 +1821,9 @@ local function CreateCharacterView(parentFrame)
             selectedSetID = equippedSetID or setIDs[1]
         end
         UpdateTopButtonStates()
+        if selectedSetID and UpdateIgnoredSlotsForSet then
+            UpdateIgnoredSlotsForSet(selectedSetID)
+        end
         
         if #setIDs == 0 then
             local emptyMsg = outfitsContent.emptyMsg
@@ -1786,14 +1841,14 @@ local function CreateCharacterView(parentFrame)
         end
         
         for idx, setID in ipairs(setIDs) do
-            local ok, totalCount, availableCount, missingList, isEquipped, name, iconFileID = pcall(GetSetItemStatus, setID)
+            local ok, totalCount, availableCount, lostCount, isEquipped, name, iconFileID = pcall(GetSetItemStatus, setID)
             if not ok or not totalCount then
                 if C_EquipmentSet and C_EquipmentSet.GetEquipmentSetInfo then
                     name, iconFileID, _, isEquipped = C_EquipmentSet.GetEquipmentSetInfo(setID)
                 end
-                totalCount = 16
-                availableCount = 16
-                missingList = {}
+                totalCount = 0
+                availableCount = 0
+                lostCount = 0
             end
             
             local row = outfitsContent.rows[idx]
@@ -1911,35 +1966,27 @@ local function CreateCharacterView(parentFrame)
                 row.Checkmark:Show()
             else
                 row.Checkmark:Hide()
-                if totalCount > 0 and availableCount < totalCount then
+                if totalCount > 0 and (lostCount > 0 or availableCount < totalCount) then
                     row.StatusText:SetText(string.format("|cffff4444%d|r|cffaaaaaa/%d Items|r", availableCount, totalCount))
                 else
                     row.StatusText:SetText(string.format("|cffaaaaaa%d/%d Items|r", availableCount, totalCount))
                 end
             end
             
-            -- Tooltip Handler (Shows missing items if not all pieces in bags)
+            -- Tooltip Handler (Uses native C_EquipmentSet tooltip if available)
             local function ShowSetTooltip(owner)
                 GameTooltip:SetOwner(owner, "ANCHOR_RIGHT")
-                GameTooltip:SetText(name or ("Set " .. setID), 1, 1, 1)
-                
-                if isEquipped then
-                    GameTooltip:AddLine("Currently equipped", 0.2, 1.0, 0.2)
-                else
-                    if #missingList > 0 then
-                        GameTooltip:AddLine(string.format("Missing Items (%d):", #missingList), 1.0, 0.2, 0.2)
-                        for _, item in ipairs(missingList) do
-                            local itemDisplayName = item.link
-                            if not itemDisplayName then
-                                if item.name then
-                                    local _, _, _, hex = SafeGetItemQualityColor(item.quality or 1)
-                                    itemDisplayName = hex and ("|c" .. hex .. item.name .. "|r") or item.name
-                                else
-                                    itemDisplayName = "|cffffffffItem #" .. item.itemID .. "|r"
-                                end
-                            end
-                            GameTooltip:AddLine(string.format("  • |cffcccccc%s:|r %s", item.slotName, itemDisplayName), 1, 1, 1)
-                        end
+                local usedNative = false
+                if GameTooltip.SetEquipmentSet then
+                    local ok = pcall(GameTooltip.SetEquipmentSet, GameTooltip, setID)
+                    if ok then usedNative = true end
+                end
+                if not usedNative then
+                    GameTooltip:SetText(name or ("Set " .. setID), 1, 1, 1)
+                    if isEquipped then
+                        GameTooltip:AddLine("Currently equipped", 0.2, 1.0, 0.2)
+                    elseif lostCount and lostCount > 0 then
+                        GameTooltip:AddLine(string.format("%d items missing", lostCount), 1.0, 0.2, 0.2)
                     else
                         GameTooltip:AddLine(string.format("All %d items ready to equip", totalCount), 0.7, 0.7, 0.7)
                     end
@@ -1969,6 +2016,9 @@ local function CreateCharacterView(parentFrame)
             -- Row Double-Click or Icon Click to Equip Set
             local function EquipCurrent()
                 selectedSetID = setID
+                if UpdateIgnoredSlotsForSet then
+                    UpdateIgnoredSlotsForSet(setID)
+                end
                 if InCombatLockdown and InCombatLockdown() then
                     UIErrorsFrame:AddMessage(ERR_NOT_IN_COMBAT or "Cannot change equipment in combat.", 1.0, 0.1, 0.1, 1.0)
                     RefreshEquipmentSets()
@@ -1984,6 +2034,10 @@ local function CreateCharacterView(parentFrame)
             row:SetScript("OnClick", function(self)
                 local now = GetTime()
                 selectedSetID = setID
+                if UpdateIgnoredSlotsForSet then
+                    UpdateIgnoredSlotsForSet(setID)
+                end
+                UpdateTopButtonStates()
                 if self.lastClick and (now - self.lastClick) < 0.35 then
                     self.lastClick = 0
                     EquipCurrent()
@@ -2291,6 +2345,9 @@ local function CreateCharacterView(parentFrame)
     end
     
     newSetBtn:SetScript("OnClick", function()
+        selectedSetID = nil
+        if ClearIgnoredSlots then ClearIgnoredSlots() end
+        if outfitsView and outfitsView.Refresh then outfitsView:Refresh() end
         if ShowNewSetDialog then
             ShowNewSetDialog("")
         end
@@ -2351,6 +2408,9 @@ local function CreateCharacterView(parentFrame)
             pcall(outfitsView.Refresh)
         end
     end)
+    outfitsView:HookScript("OnHide", function()
+        if ClearIgnoredSlots then ClearIgnoredSlots() end
+    end)
     
     -- Sub-View 3: Titles
     local titlesView = CreateFrame("Frame", "OnePanel_TitlesSubView", subContentView)
@@ -2393,8 +2453,15 @@ local function CreateCharacterView(parentFrame)
                 end
             end
         end
-        if not showFlyout and _G["OnePanel_EquipmentFlyout"] then
-            _G["OnePanel_EquipmentFlyout"]:Hide()
+        if not showFlyout then
+            if _G["OnePanel_EquipmentFlyout"] then
+                _G["OnePanel_EquipmentFlyout"]:Hide()
+            end
+            if ClearIgnoredSlots then ClearIgnoredSlots() end
+        else
+            if UpdateIgnoredSlotsForSet and selectedSetID then
+                UpdateIgnoredSlotsForSet(selectedSetID)
+            end
         end
     end
     
@@ -2517,6 +2584,12 @@ local function CreateCharacterView(parentFrame)
                     end
                 end
             end
+            if subPanel and subPanel.activeTab ~= "outfits" then
+                btn.ignored = nil
+            end
+            if btn.ignoreTexture then
+                btn.ignoreTexture:SetShown(btn.ignored == true)
+            end
         end
         if statsView.Refresh then statsView:Refresh() end
     end
@@ -2548,6 +2621,7 @@ local function CreateCharacterView(parentFrame)
     container:RegisterEvent("UPDATE_SHAPESHIFT_FORMS")
     container:RegisterEvent("ITEM_LOCK_CHANGED")
     container:HookScript("OnHide", function()
+        if ClearIgnoredSlots then ClearIgnoredSlots() end
         if _G["OnePanel_NewSetDialog"] then
             _G["OnePanel_NewSetDialog"]:Hide()
         end
