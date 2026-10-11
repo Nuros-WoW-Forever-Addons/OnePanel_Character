@@ -3,6 +3,7 @@
 ## Notes: Character Sheet equipment and 3D player portrait plugin for OnePanel Suite.
 ## Author: OnePanel Suite Team
 ## Version: 0.0.1
+## IconTexture: Interface\Icons\INV_Chest_Chain_05
 ## Dependencies: OnePanel, OnePanelUtils
 
 Core.lua
