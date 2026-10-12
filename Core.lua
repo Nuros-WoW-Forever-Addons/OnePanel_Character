@@ -1197,7 +1197,7 @@ local function CreateCharacterView(parentFrame)
     ---------------------------------------------------------------------------
     
     local function CreateSlotButton(slotInfo, relativeTo, point, relPoint, x, y)
-        local btn = CreateFrame("Button", "OnePanel_EqSlot_" .. slotInfo.id, leftArea)
+        local btn = CreateFrame("Button", "OnePanel_EqSlot_" .. slotInfo.id, leftArea, "SecureActionButtonTemplate")
         btn:SetSize(37, 37)
         btn:SetPoint(point, relativeTo, relPoint, x, y)
         btn:SetFrameLevel(101)
@@ -1206,6 +1206,12 @@ local function CreateCharacterView(parentFrame)
         
         btn:RegisterForClicks("LeftButtonUp", "RightButtonUp")
         btn:RegisterForDrag("LeftButton")
+        
+        -- Native Secure Attributes for Enchant / Spell Targeting & Right-Click Item Use
+        btn:SetAttribute("target-slot", slotInfo.id)
+        btn:SetAttribute("type2", "item")
+        btn:SetAttribute("slot2", slotInfo.id)
+        btn:SetAttribute("shift-type2", "none")
         
         local bg = btn:CreateTexture(nil, "BACKGROUND")
         bg:SetTexture("Interface\\Buttons\\UI-Quickslot2")
@@ -1257,6 +1263,15 @@ local function CreateCharacterView(parentFrame)
             if CursorUpdate then
                 CursorUpdate(self)
             end
+            if not InCombatLockdown or not InCombatLockdown() then
+                local canTargetItem = SpellCanTargetItem and SpellCanTargetItem()
+                local isTargeting = SpellIsTargeting and SpellIsTargeting()
+                if canTargetItem or isTargeting then
+                    self:SetAttribute("target-slot", self.slotId)
+                    self:SetAttribute("type1", "macro")
+                    self:SetAttribute("macrotext1", "/use " .. self.slotId)
+                end
+            end
         end)
         
         btn:SetScript("OnLeave", function(self)
@@ -1264,6 +1279,10 @@ local function CreateCharacterView(parentFrame)
             GameTooltip_Hide()
             if ResetCursor then
                 ResetCursor()
+            end
+            if not InCombatLockdown or not InCombatLockdown() then
+                self:SetAttribute("type1", nil)
+                self:SetAttribute("macrotext1", nil)
             end
         end)
         
@@ -1286,7 +1305,45 @@ local function CreateCharacterView(parentFrame)
             end
         end)
         
-        btn:SetScript("OnClick", function(self, button)
+        -- Secure PreClick Handler (Runs immediately before SecureActionButton_OnClick)
+        btn:SetScript("PreClick", function(self, button, down)
+            if not InCombatLockdown or not InCombatLockdown() then
+                local canTargetItem = SpellCanTargetItem and SpellCanTargetItem()
+                local isTargeting = SpellIsTargeting and SpellIsTargeting()
+                if canTargetItem or isTargeting then
+                    self.wasSpellTargeting = true
+                    self:SetAttribute("target-slot", self.slotId)
+                    self:SetAttribute("type1", "macro")
+                    self:SetAttribute("macrotext1", "/use " .. self.slotId)
+                else
+                    self.wasSpellTargeting = false
+                    self:SetAttribute("type1", nil)
+                    self:SetAttribute("macrotext1", nil)
+                end
+            end
+        end)
+        
+        -- Secure PostClick Handler (Runs immediately after SecureActionButton_OnClick)
+        btn:SetScript("PostClick", function(self, button, down)
+            if not InCombatLockdown or not InCombatLockdown() then
+                self:SetAttribute("type1", nil)
+                self:SetAttribute("macrotext1", nil)
+            end
+            
+            -- If click was consumed by spell targeting (Armor Kit / Enchant / Oil / Poison)
+            if self.wasSpellTargeting then
+                self.wasSpellTargeting = nil
+                if container and container.UpdateEquipment then
+                    container:UpdateEquipment()
+                end
+                return
+            end
+            
+            -- Right Click is handled securely by type2="item" (trinkets / on-use equipment)
+            if button == "RightButton" then
+                return
+            end
+            
             if InCombatLockdown and InCombatLockdown() then
                 if UIErrorsFrame then
                     UIErrorsFrame:AddMessage("Cannot swap equipment in combat!", 1, 0.1, 0.1)
@@ -1294,16 +1351,7 @@ local function CreateCharacterView(parentFrame)
                 return
             end
             
-            -- 1. Targeted Spell / Item Enchant / Armor Kit / Sharpening Stone / Poison
-            if (SpellCanTargetItem and SpellCanTargetItem()) or (SpellIsTargeting and SpellIsTargeting()) then
-                PickupInventoryItem(self.slotId)
-                if container and container.UpdateEquipment then
-                    container:UpdateEquipment()
-                end
-                return
-            end
-            
-            -- 2. Modified Clicks (Linking in chat, Dressing Room preview, Socketing)
+            -- 1. Modified Clicks (Linking in chat, Dressing Room preview, Socketing)
             if IsModifiedClick and IsModifiedClick() then
                 if PaperDollItemSlotButton_OnModifiedClick then
                     local ok = pcall(PaperDollItemSlotButton_OnModifiedClick, self, button)
@@ -1327,13 +1375,7 @@ local function CreateCharacterView(parentFrame)
                 end
             end
             
-            -- 3. Right Click: Use equipped item (Trinkets, On-Use equipment abilities)
-            if button == "RightButton" then
-                UseInventoryItem(self.slotId)
-                return
-            end
-            
-            -- 4. Left Click with Item on Cursor: Equip or Swap
+            -- 2. Left Click with Item on Cursor: Equip or Swap
             if CursorHasItem and CursorHasItem() then
                 PickupInventoryItem(self.slotId)
                 if container and container.UpdateEquipment then
@@ -1342,7 +1384,7 @@ local function CreateCharacterView(parentFrame)
                 return
             end
             
-            -- 5. Left Click without item on cursor: Toggle equipment flyout
+            -- 3. Left Click without item on cursor: Toggle equipment flyout
             local flyout = _G["OnePanel_EquipmentFlyout"]
             if flyout and flyout:IsShown() and flyout.currentSlotId == slotInfo.id then
                 flyout:Hide()
@@ -1357,11 +1399,13 @@ local function CreateCharacterView(parentFrame)
         
         btn:SetScript("OnDragStart", function(self)
             if InCombatLockdown and InCombatLockdown() then return end
+            if (SpellCanTargetItem and SpellCanTargetItem()) or (SpellIsTargeting and SpellIsTargeting()) then return end
             PickupInventoryItem(self.slotId)
         end)
         
         btn:SetScript("OnReceiveDrag", function(self)
             if InCombatLockdown and InCombatLockdown() then return end
+            if (SpellCanTargetItem and SpellCanTargetItem()) or (SpellIsTargeting and SpellIsTargeting()) then return end
             PickupInventoryItem(self.slotId)
         end)
         
