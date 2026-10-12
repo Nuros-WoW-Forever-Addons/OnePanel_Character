@@ -1296,22 +1296,7 @@ local function CreateCharacterView(parentFrame)
             
             -- 1. Targeted Spell / Item Enchant / Armor Kit / Sharpening Stone / Poison
             if (SpellCanTargetItem and SpellCanTargetItem()) or (SpellIsTargeting and SpellIsTargeting()) then
-                local targeted = false
-                if SpellTargetItem then
-                    local ok = pcall(SpellTargetItem, self.slotId)
-                    if ok then targeted = true end
-                end
-                if not targeted and PaperDollItemSlotButton_OnClick then
-                    pcall(PaperDollItemSlotButton_OnClick, self, button)
-                end
-                if container and container.UpdateEquipment then
-                    container:UpdateEquipment()
-                end
-                return
-            elseif SpellCanTargetUnit and SpellCanTargetUnit() then
-                if SpellTargetUnit then
-                    pcall(SpellTargetUnit, "player")
-                end
+                PickupInventoryItem(self.slotId)
                 if container and container.UpdateEquipment then
                     container:UpdateEquipment()
                 end
