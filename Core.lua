@@ -1202,6 +1202,7 @@ local function CreateCharacterView(parentFrame)
         btn:SetPoint(point, relativeTo, relPoint, x, y)
         btn:SetFrameLevel(101)
         btn.slotId = slotInfo.id
+        btn:SetID(slotInfo.id)
         
         btn:RegisterForClicks("LeftButtonUp", "RightButtonUp")
         btn:RegisterForDrag("LeftButton")
@@ -1237,6 +1238,54 @@ local function CreateCharacterView(parentFrame)
         ignoreTexture:Hide()
         btn.ignoreTexture = ignoreTexture
         
+        btn:SetScript("OnEnter", function(self)
+            self:RegisterEvent("MODIFIER_STATE_CHANGED")
+            GameTooltip:SetOwner(self, "ANCHOR_RIGHT")
+            local hasItem = false
+            if GameTooltip.SetInventoryItem then
+                local ok, itemPresent = pcall(GameTooltip.SetInventoryItem, GameTooltip, "player", self.slotId)
+                if ok and itemPresent then
+                    hasItem = true
+                end
+            end
+            if not hasItem then
+                local slotUpper = slotInfo.name and slotInfo.name:upper()
+                local slotDisplayName = (slotUpper and _G[slotUpper]) or (slotInfo.name and slotInfo.name:gsub("Slot$", "")) or ("Slot " .. self.slotId)
+                GameTooltip:SetText(slotDisplayName, 1, 1, 1)
+            end
+            GameTooltip:Show()
+            if CursorUpdate then
+                CursorUpdate(self)
+            end
+        end)
+        
+        btn:SetScript("OnLeave", function(self)
+            self:UnregisterEvent("MODIFIER_STATE_CHANGED")
+            GameTooltip_Hide()
+            if ResetCursor then
+                ResetCursor()
+            end
+        end)
+        
+        btn:SetScript("OnEvent", function(self, event)
+            if event == "MODIFIER_STATE_CHANGED" and self:IsMouseOver() then
+                GameTooltip:SetOwner(self, "ANCHOR_RIGHT")
+                local hasItem = false
+                if GameTooltip.SetInventoryItem then
+                    local ok, itemPresent = pcall(GameTooltip.SetInventoryItem, GameTooltip, "player", self.slotId)
+                    if ok and itemPresent then
+                        hasItem = true
+                    end
+                end
+                if not hasItem then
+                    local slotUpper = slotInfo.name and slotInfo.name:upper()
+                    local slotDisplayName = (slotUpper and _G[slotUpper]) or (slotInfo.name and slotInfo.name:gsub("Slot$", "")) or ("Slot " .. self.slotId)
+                    GameTooltip:SetText(slotDisplayName, 1, 1, 1)
+                end
+                GameTooltip:Show()
+            end
+        end)
+        
         btn:SetScript("OnClick", function(self, button)
             if InCombatLockdown and InCombatLockdown() then
                 if UIErrorsFrame then
@@ -1245,15 +1294,75 @@ local function CreateCharacterView(parentFrame)
                 return
             end
             
-            if CursorHasItem() then
-                PickupInventoryItem(self.slotId)
-            else
-                local flyout = _G["OnePanel_EquipmentFlyout"]
-                if flyout and flyout:IsShown() and flyout.currentSlotId == slotInfo.id then
-                    flyout:Hide()
-                else
-                    ShowEquipmentSlotFlyout(self, slotInfo)
+            -- 1. Targeted Spell / Item Enchant / Armor Kit / Sharpening Stone / Poison
+            if (SpellCanTargetItem and SpellCanTargetItem()) or (SpellIsTargeting and SpellIsTargeting()) then
+                local targeted = false
+                if SpellTargetItem then
+                    local ok = pcall(SpellTargetItem, self.slotId)
+                    if ok then targeted = true end
                 end
+                if not targeted and PaperDollItemSlotButton_OnClick then
+                    pcall(PaperDollItemSlotButton_OnClick, self, button)
+                end
+                if container and container.UpdateEquipment then
+                    container:UpdateEquipment()
+                end
+                return
+            elseif SpellCanTargetUnit and SpellCanTargetUnit() then
+                if SpellTargetUnit then
+                    pcall(SpellTargetUnit, "player")
+                end
+                if container and container.UpdateEquipment then
+                    container:UpdateEquipment()
+                end
+                return
+            end
+            
+            -- 2. Modified Clicks (Linking in chat, Dressing Room preview, Socketing)
+            if IsModifiedClick and IsModifiedClick() then
+                if PaperDollItemSlotButton_OnModifiedClick then
+                    local ok = pcall(PaperDollItemSlotButton_OnModifiedClick, self, button)
+                    if ok then return end
+                end
+                local link = GetInventoryItemLink("player", self.slotId)
+                if link then
+                    if HandleModifiedItemClick and HandleModifiedItemClick(link) then
+                        return
+                    end
+                    if IsModifiedClick("CHATLINK") and ChatEdit_InsertLink and ChatEdit_InsertLink(link) then
+                        return
+                    end
+                    if IsModifiedClick("DRESSUP") and DressUpItemLink and DressUpItemLink(link) then
+                        return
+                    end
+                end
+                if SocketInventoryItem and IsModifiedClick("SOCKETLOOKUP") then
+                    SocketInventoryItem(self.slotId)
+                    return
+                end
+            end
+            
+            -- 3. Right Click: Use equipped item (Trinkets, On-Use equipment abilities)
+            if button == "RightButton" then
+                UseInventoryItem(self.slotId)
+                return
+            end
+            
+            -- 4. Left Click with Item on Cursor: Equip or Swap
+            if CursorHasItem and CursorHasItem() then
+                PickupInventoryItem(self.slotId)
+                if container and container.UpdateEquipment then
+                    container:UpdateEquipment()
+                end
+                return
+            end
+            
+            -- 5. Left Click without item on cursor: Toggle equipment flyout
+            local flyout = _G["OnePanel_EquipmentFlyout"]
+            if flyout and flyout:IsShown() and flyout.currentSlotId == slotInfo.id then
+                flyout:Hide()
+            else
+                ShowEquipmentSlotFlyout(self, slotInfo)
             end
             
             if container and container.UpdateEquipment then
