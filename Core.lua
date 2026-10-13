@@ -1218,7 +1218,9 @@ local function CreateCharacterView(parentFrame)
         btn:RegisterForClicks("LeftButtonUp", "RightButtonUp")
         btn:RegisterForDrag("LeftButton")
         
-        -- Native Secure Attributes for Right-Click Item Use
+        -- Native Secure Attributes for Right-Click Item Use & Explicit MouseUp Execution
+        btn:SetAttribute("useOnKeyDown", false)
+        btn:SetAttribute("pressAndHoldAction", false)
         btn:SetAttribute("type2", "item")
         btn:SetAttribute("slot2", slotInfo.id)
         btn:SetAttribute("shift-type2", "none")
@@ -1286,6 +1288,7 @@ local function CreateCharacterView(parentFrame)
                         self:SetAttribute("type1", "macro")
                         self:SetAttribute("macrotext1", "/click Character" .. (slotInfo.name or ""))
                     end
+                    self:SetAttribute("target-item", self.slotId)
                 end
             end
         end)
@@ -1301,6 +1304,7 @@ local function CreateCharacterView(parentFrame)
                 self:SetAttribute("clickbutton", nil)
                 self:SetAttribute("clickbutton1", nil)
                 self:SetAttribute("macrotext1", nil)
+                self:SetAttribute("target-item", nil)
             end
         end)
         
@@ -1325,6 +1329,7 @@ local function CreateCharacterView(parentFrame)
         
         -- Secure PreClick Handler (Runs immediately before SecureActionButton_OnClick)
         btn:SetScript("PreClick", function(self, button, down)
+            if down then return end
             if not InCombatLockdown or not InCombatLockdown() then
                 local canTargetItem = SpellCanTargetItem and SpellCanTargetItem()
                 local isTargeting = SpellIsTargeting and SpellIsTargeting()
@@ -1339,23 +1344,27 @@ local function CreateCharacterView(parentFrame)
                         self:SetAttribute("type1", "macro")
                         self:SetAttribute("macrotext1", "/click Character" .. (slotInfo.name or ""))
                     end
+                    self:SetAttribute("target-item", self.slotId)
                 else
                     self.wasSpellTargeting = false
                     self:SetAttribute("type1", nil)
                     self:SetAttribute("clickbutton", nil)
                     self:SetAttribute("clickbutton1", nil)
                     self:SetAttribute("macrotext1", nil)
+                    self:SetAttribute("target-item", nil)
                 end
             end
         end)
         
         -- Secure PostClick Handler (Runs immediately after SecureActionButton_OnClick)
         btn:SetScript("PostClick", function(self, button, down)
+            if down then return end
             if not InCombatLockdown or not InCombatLockdown() then
                 self:SetAttribute("type1", nil)
                 self:SetAttribute("clickbutton", nil)
                 self:SetAttribute("clickbutton1", nil)
                 self:SetAttribute("macrotext1", nil)
+                self:SetAttribute("target-item", nil)
             end
             
             -- If click was consumed by spell targeting (Armor Kit / Enchant / Oil / Poison)
