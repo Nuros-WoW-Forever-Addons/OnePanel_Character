@@ -1196,6 +1196,17 @@ local function CreateCharacterView(parentFrame)
     -- Equipment Slot Buttons (Matches Native Anchors & Frame Level 101)
     ---------------------------------------------------------------------------
     
+    local function GetBlizzardSlotButton(slotInfo)
+        if not slotInfo then return nil end
+        if slotInfo.id == 18 then
+            return _G["CharacterRangedSlot"] or _G["CharacterRelicSlot"]
+        end
+        if slotInfo.name then
+            return _G["Character" .. slotInfo.name]
+        end
+        return nil
+    end
+
     local function CreateSlotButton(slotInfo, relativeTo, point, relPoint, x, y)
         local btn = CreateFrame("Button", "OnePanel_EqSlot_" .. slotInfo.id, leftArea, "SecureActionButtonTemplate")
         btn:SetSize(37, 37)
@@ -1207,8 +1218,7 @@ local function CreateCharacterView(parentFrame)
         btn:RegisterForClicks("LeftButtonUp", "RightButtonUp")
         btn:RegisterForDrag("LeftButton")
         
-        -- Native Secure Attributes for Enchant / Spell Targeting & Right-Click Item Use
-        btn:SetAttribute("target-slot", slotInfo.id)
+        -- Native Secure Attributes for Right-Click Item Use
         btn:SetAttribute("type2", "item")
         btn:SetAttribute("slot2", slotInfo.id)
         btn:SetAttribute("shift-type2", "none")
@@ -1267,9 +1277,15 @@ local function CreateCharacterView(parentFrame)
                 local canTargetItem = SpellCanTargetItem and SpellCanTargetItem()
                 local isTargeting = SpellIsTargeting and SpellIsTargeting()
                 if canTargetItem or isTargeting then
-                    self:SetAttribute("target-slot", self.slotId)
-                    self:SetAttribute("type1", "macro")
-                    self:SetAttribute("macrotext1", "/use " .. self.slotId)
+                    local blizzBtn = GetBlizzardSlotButton(slotInfo)
+                    if blizzBtn then
+                        self:SetAttribute("type1", "click")
+                        self:SetAttribute("clickbutton", blizzBtn)
+                        self:SetAttribute("clickbutton1", blizzBtn)
+                    else
+                        self:SetAttribute("type1", "macro")
+                        self:SetAttribute("macrotext1", "/click Character" .. (slotInfo.name or ""))
+                    end
                 end
             end
         end)
@@ -1282,6 +1298,8 @@ local function CreateCharacterView(parentFrame)
             end
             if not InCombatLockdown or not InCombatLockdown() then
                 self:SetAttribute("type1", nil)
+                self:SetAttribute("clickbutton", nil)
+                self:SetAttribute("clickbutton1", nil)
                 self:SetAttribute("macrotext1", nil)
             end
         end)
@@ -1312,12 +1330,20 @@ local function CreateCharacterView(parentFrame)
                 local isTargeting = SpellIsTargeting and SpellIsTargeting()
                 if canTargetItem or isTargeting then
                     self.wasSpellTargeting = true
-                    self:SetAttribute("target-slot", self.slotId)
-                    self:SetAttribute("type1", "macro")
-                    self:SetAttribute("macrotext1", "/use " .. self.slotId)
+                    local blizzBtn = GetBlizzardSlotButton(slotInfo)
+                    if blizzBtn then
+                        self:SetAttribute("type1", "click")
+                        self:SetAttribute("clickbutton", blizzBtn)
+                        self:SetAttribute("clickbutton1", blizzBtn)
+                    else
+                        self:SetAttribute("type1", "macro")
+                        self:SetAttribute("macrotext1", "/click Character" .. (slotInfo.name or ""))
+                    end
                 else
                     self.wasSpellTargeting = false
                     self:SetAttribute("type1", nil)
+                    self:SetAttribute("clickbutton", nil)
+                    self:SetAttribute("clickbutton1", nil)
                     self:SetAttribute("macrotext1", nil)
                 end
             end
@@ -1327,6 +1353,8 @@ local function CreateCharacterView(parentFrame)
         btn:SetScript("PostClick", function(self, button, down)
             if not InCombatLockdown or not InCombatLockdown() then
                 self:SetAttribute("type1", nil)
+                self:SetAttribute("clickbutton", nil)
+                self:SetAttribute("clickbutton1", nil)
                 self:SetAttribute("macrotext1", nil)
             end
             
