@@ -7,7 +7,7 @@
 ## 🎯 Overview & Scope
 
 - **Addon Name**: OnePanel_Character
-- **Current Version**: 0.0.1
+- **Current Version**: 0.0.2
 - **Suite**: Part of the **OneSuite** family (OnePanel Plugin)
 - **GitHub Repository**:
   - Exists: TRUE
@@ -65,7 +65,13 @@ When picking up development on this addon:
 
 ## ✅ Recent Completed Work (Latest Spins)
 
-### Spin 0.0.1
+### Spin 0.0.2 (2026-10-12)
+- Fixed missing tooltips when mousing over items in the PaperDoll and Equipment Manager frames (`GameTooltip:SetInventoryItem("player", slotId)`).
+- Converted equipment slot buttons to `SecureActionButtonTemplate` to support applying enchants and armor kits (e.g. Medium Armor Kit).
+- Delegated spell targeting clicks to native Blizzard `Character<Slot>` buttons (`CharacterChestSlot`, etc.) via `clickbutton` attributes to bypass third-party restrictions on `PickupInventoryItem`.
+- Resolved silent click failures by explicitly setting `useOnKeyDown` to `false` and mapping `target-item` attributes on slot buttons.
+
+### Spin 0.0.1 (2026-10-10)
 - Full 19-slot paperdoll implementation with item link tooltips and rarity borders.
 - Class-aware detection for Relic vs. Ranged slots.
 - Rotating 3D character model with race-specific background textures.
@@ -95,10 +101,12 @@ When picking up development on this addon:
 - **Model Interaction**: Click and drag across player model — confirm smooth 360-degree rotation.
 - **Equip/Unequip**: Swap an item in bags — confirm slot icon, border, and stats update immediately.
 - **Drawer Toggle**: Click expand arrow — confirm stats sidebar expands smoothly and OnePanel master frame widens.
+- **Item Enchants / Kits**: Use armor kit or enchant scroll in bag, then click equipped slot (e.g. Chest) — confirm enchantment applies cleanly without Lua errors.
 
 ---
 
 ## ⚠️ Technical Constraints & Engine Gotchas
 
 - **DressUpModel API Variances**: Different WoW engine versions use slightly different model methods (`SetUnit("player")` vs `RefreshUnit()`). Always wrap model initialization in safe compatibility checks.
-- **Secure Item Clicks**: Equipment slots handle item picking/dropping. Never interfere with cursor item drops during combat.
+- **Spell Targeting & Insecure Lua Restrictions**: Applying an enchant or armor kit to an equipped item requires `PickupInventoryItem(slotId)`. Third-party addon code calling `PickupInventoryItem` or `SpellTargetItem` while `SpellCanTargetItem()` is true will trigger `Forbidden function call`. Instead, inherit `SecureActionButtonTemplate` and delegate click to native Blizzard frame (`clickbutton = Character<Slot>Slot`).
+- **`useOnKeyDown` on SecureActionButtons**: In modern WoW / Classic Beta clients, the CVar `ActionButtonUseKeyDown` defaults to `true`. Third-party buttons registered for mouse-up (`LeftButtonUp`) will evaluate `clickAction` as `false` and silently fail unless `btn:SetAttribute("useOnKeyDown", false)` is explicitly set.
